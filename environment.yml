@@ -1,0 +1,40 @@
+name: crohn_vlm
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  # Deep learning (CUDA 11.8). For CPU/MPS/CUDA 12, drop pytorch-cuda
+  # and replace with the appropriate pytorch build.
+  - pytorch=2.7.1
+  - torchvision=0.22.1
+  - torchaudio=2.7.1
+  - pytorch-cuda=11.8
+  # Scientific Python
+  - numpy=2.2.6
+  - pandas=2.2.3
+  - scipy=1.15.2
+  - scikit-learn=1.7.2
+  - matplotlib=3.10.8
+  - seaborn=0.13.2
+  - pillow
+  - tqdm
+  - joblib
+  # Survival analysis
+  - scikit-survival=0.25.0
+  - lifelines=0.27.4
+  # Medical imaging
+  - nibabel=5.4.2
+  - simpleitk=2.5.3
+  - pip:
+    - transformers==5.2.0
+    - peft==0.18.1
+    - accelerate==1.12.0
+    - safetensors==0.7.0
+    - huggingface-hub>=0.34.0
+    - datasets==4.8.3
+    - torchmetrics==1.8.2
+    - TotalSegmentator==2.13.0

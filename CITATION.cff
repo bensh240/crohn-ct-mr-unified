@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the accompanying paper."
+title: "A Unified CT and MR Enterography Foundation-Model Pipeline for Crohn's Disease"
+type: software
+authors:
+  - family-names: Shaya
+    given-names: Ben
+    affiliation: "Reichman University, Herzliya, Israel"
+    email: bensh240@gmail.com
+  - family-names: Freiman
+    given-names: Moti
+    affiliation: "Reichman University, Herzliya, Israel; Shaare Zedek Medical Center, Jerusalem, Israel"
+repository-code: "https://github.com/bensh240/crohn-ct-mr-unified"
+license: MIT
+year: 2026
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Shaya
+      given-names: Ben
+    - family-names: Freiman
+      given-names: Moti
+  title: "A Unified CT and MR Enterography Foundation-Model Pipeline for Crohn's Disease: Lightweight Modality Conditioning Matches Dual Specialists, While Domain-Specific Normalization Induces Negative Transfer"
+  journal: "npj Digital Medicine"
+  year: 2026
+  notes: "Manuscript under review. DOI to be added upon acceptance."

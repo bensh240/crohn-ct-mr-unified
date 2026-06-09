@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+.pytest_cache/
+.coverage
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs
+*.log
+*.out
+*.err
+logs/
+
+# Model weights and large artifacts (use HF Hub / Zenodo)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.joblib
+checkpoints/
+checkpoints_placeholder/*.pt
+
+# Data (never commit patient data)
+data/
+predictions/
+survival/
+results/
+*.csv
+*.tsv
+*.parquet
+db/
+*.db
+*.sqlite
+
+# Generated paper / figure outputs
+paper/figures/*.png
+!paper/figures/.gitkeep
+
+# Local config
+.env
+config.local.py
