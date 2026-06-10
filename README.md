@@ -205,4 +205,4 @@ metadata.
 ## Contact
 
 Ben Shaya (bensh240@gmail.com)
-Moti Freiman (moti.freiman@runi.ac.il)
+Moti Freiman (moti.freiman@technion.ac.il)
