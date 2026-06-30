@@ -50,7 +50,7 @@ checkpoints_placeholder/*.pt
 # Data (never commit patient data)
 data/
 predictions/
-survival/
+/survival/
 results/
 reports/
 *.csv
