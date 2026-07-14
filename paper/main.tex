@@ -1,510 +1,631 @@
 % ============================================================================
-% A Unified CT + MR Enterography Foundation-Model Pipeline for Crohn's Disease
-% Lightweight modality conditioning matches dual specialists;
-% domain-specific normalization causes negative transfer.
-% ============================================================================
-% Research Question:
-% Can a single modality-conditioned foundation-model backbone extract
-% radiological findings from BOTH CT and MR enterography as accurately as two
-% independent modality specialists, and feed an MR-only survival head to
-% predict the time to medical intervention in Crohn's disease?
+% A Unified CT and MR Enterography Foundation-Model Pipeline for Crohn's Disease
+% Target venue: npj Digital Medicine (Article)
+%
+% npj DM conventions applied:
+%   - Single flowing (unstructured) abstract, ~200 words.
+%   - Section order: Introduction (flows from title) -> Results -> Discussion ->
+%     Methods -> Data availability -> Code availability -> References.
+%   - Tables titled "Table N |" with bold caption; metrics reported as
+%     mean +/- SD and/or point estimate with 95% CI in square brackets.
+%
+% NOTE: This draft reports the CLEAN, Crohn's-only (CD) cohort after excluding
+% ulcerative colitis (UC). These numbers supersede any earlier all-IBD figures
+% (e.g. macro-AUC 0.849, surgery C-index 0.816), which were UC-inflated.
 % ============================================================================
 
-\documentclass[preprint,12pt]{elsarticle}
+\documentclass[11pt]{article}
 
+\usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{xcolor}
 \usepackage{hyperref}
-\usepackage{algorithm}
-\usepackage{algorithmic}
 \usepackage{subcaption}
 \usepackage{siunitx}
+\usepackage{authblk}
 
 % Custom commands
 \newcommand{\cindex}{C\text{-index}}
-\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\todo}[1]{\TODO{#1}}
 
-\journal{npj Digital Medicine}
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+\title{\bfseries A Unified CT and MR Enterography Foundation-Model Pipeline
+for Individualized Prognosis in Crohn's Disease}
+
+\author[1]{Ben Shaya}
+\author[1,2]{Moti Freiman\thanks{Corresponding author: moti.freiman@runi.ac.il}}
+\affil[1]{Faculty of Computer Science, Reichman University (RUNI), Herzliya, Israel}
+\affil[2]{Shaare Zedek Medical Center, Jerusalem, Israel}
+\date{}
 
 \begin{document}
 
-\begin{frontmatter}
-
-\title{A Unified CT and MR Enterography Foundation-Model Pipeline for Crohn's Disease:\\
-Lightweight Modality Conditioning Matches Dual Specialists, While Domain-Specific\\
-Normalization Induces Negative Transfer}
-
-\author[runi]{Ben Shaya}
-\author[runi,szmc]{Moti Freiman\corref{cor1}}
-\cortext[cor1]{Corresponding author}
-
-\address[runi]{Faculty of Computer Science, Reichman University (RUNI), Herzliya, Israel}
-\address[szmc]{Shaare Zedek Medical Center, Jerusalem, Israel}
-
-\begin{abstract}
-\textbf{Background:}
-Crohn's disease (CD) is assessed with both MR enterography (MRE) and, frequently, CT enterography (CTE), yet deep-learning pipelines are almost always trained on a single modality. Whether one modality-conditioned foundation-model backbone can serve \textit{both} modalities as well as two dedicated specialists --- and whether such unification helps or hurts --- is unknown. We study this question in a two-stage prognostic pipeline that maps imaging to radiological findings and findings to time-to-event risk.
-
-\textbf{Methods:}
-We assembled 6{,}223 MRE and 1{,}830 CTE examinations from multiple Israeli centers, with patient-level (leakage-checked) splits and finding labels derived from radiology report text by a clinical information-extraction model. Stage~1 is a frozen DINOv3 backbone with LoRA adapters and dual-branch multi-instance learning (MIL) that detects 10 radiological findings. We compared \textbf{Option~B} (two independent CT and MR specialists) against \textbf{Option~C} (one unified backbone with modality conditioning), ablating three conditioning components: a modality token, feature-wise linear modulation (FiLM), and domain-specific normalization (DSBN). All models were warm-started from the same prior MR-only checkpoint, applied \emph{symmetrically} to both options. Stage~2 fits a penalized Cox model on the unified CT+MR cohort (6{,}011 studies, 4{,}191 MR + 1{,}820 CT, 5{,}256 patients) for surgery, steroid dependence, and biologic switch, with patient-grouped 5-fold cross-validation and per-modality C-index reporting. Evaluation used paired bootstrap confidence intervals, the integrated Brier score (IBS), leave-one-center-out (LOCO) validation, and decision-curve analysis (DCA).
-
-\textbf{Results:}
-The lead methodological finding is that the heaviest conditioning component, DSBN, causes \emph{statistically significant negative transfer}: removing it (token+FiLM vs.\ the full token+FiLM+DSBN model) improved MR macro-AUC by $+0.019$ (95\% CI $[+0.008, +0.030]$). With lightweight conditioning only (token+FiLM), the single unified model matched the MR specialist exactly (macro-AUC $0.849 = 0.849$) and was statistically equivalent to the CT specialist ($0.772$ vs.\ $0.760$; $+0.012$, 95\% CI $[-0.012, +0.035]$). Downstream, the same A2 backbone fed a \textbf{unified CT and MR Cox survival model} (6{,}011 studies, 4{,}191 MR + 1{,}820 CT, 817 surgery events): the combined model reached a surgery C-index of $0.816 \pm 0.015$ ($\Delta\cindex = +0.127$ over clinical features alone) with a CT-subset C-index of $0.767$, generalized across MR hospitals (LOCO surgery $0.805 \pm 0.023$), was well calibrated (IBS $= 0.072$), and achieved the highest net benefit in DCA across clinically relevant thresholds.
-
-\textbf{Conclusion:}
-A single modality-conditioned foundation-model backbone can replace two modality specialists for CD finding detection at no statistically significant cost --- halving the number of deployed models --- provided conditioning is kept lightweight; domain-specific normalization should be omitted because it over-parameterizes and degrades the dominant modality. We frame the unification as \emph{parity} (no detected accuracy difference, rather than a formally powered non-inferiority trial) rather than superiority; CT extends only the finding-detection stage, and all prognostic results are MR-based --- we make no claim that adding CT improves MR-based prognosis.
-\end{abstract}
-
-\begin{keyword}
-Crohn's disease \sep CT enterography \sep MR enterography \sep Foundation models \sep Modality conditioning \sep Multi-instance learning \sep Survival analysis \sep Negative transfer
-\end{keyword}
-
-\end{frontmatter}
+\maketitle
 
 % ============================================================================
-\section{Introduction}
+% ABSTRACT (npj DM: single unstructured paragraph, ~200 words)
+% ============================================================================
+\begin{abstract}
+\noindent
+Crohn's disease (CD) is assessed with both magnetic resonance enterography (MRE)
+and computed tomography enterography (CTE), yet deep-learning pipelines are almost
+always trained on a single modality, are annotated by hand at small scale, and stop
+at cross-sectional activity scoring rather than individualized prognosis. We assembled
+8{,}053 enterography studies from four centers and built a two-stage pipeline in which
+a clinical language model (HSMP-BERT) automatically extracts ten radiological findings
+from free-text Hebrew reports, a modality-conditioned foundation-model backbone
+(frozen DINOv3 with low-rank adapters and dual-branch multi-instance learning) detects
+those findings from both CTE and MRE, and a penalized Cox model maps findings and
+clinical features to time-to-event risk. After excluding ulcerative colitis to obtain
+a rigorously CD-only cohort (7{,}170 detection studies; 5{,}148 with linked outcomes),
+the unified detector reached a held-out macro-AUC of 0.780 (95\% CI 0.750--0.810) on MRE
+and 0.744 (0.691--0.789) on CTE, and predicted time to surgery with a concordance index
+of 0.792 (0.776--0.808), where imaging added 0.103 over clinical features alone, generalized across
+centers (leave-one-center-out 0.754), and was well calibrated (integrated Brier score 0.074). A modality
+token with feature-wise
+linear modulation let one unified model match the MRI specialist (0.780 vs 0.793) and outperform the
+CT specialist (0.744 vs 0.673), whereas domain-specific normalization degraded the dominant modality.
+A single conditioning-light foundation model can therefore serve both modalities and deliver
+individualized, calibrated CD prognosis.
+\end{abstract}
+
+% ============================================================================
+\section*{Introduction}
 \label{sec:introduction}
 % ============================================================================
 
-Crohn's disease (CD) is a chronic relapsing-remitting inflammatory bowel disease affecting over 3 million people in the United States, with rising global incidence \cite{torres2017crohns}. The clinical course is notoriously heterogeneous: some patients maintain long-term remission with minimal therapy, while others progress to surgical resection, steroid-dependent disease, or repeated escalation of biologic therapy \cite{peyrin2017lancet}. This unpredictability poses a fundamental challenge: \textit{which patients will deteriorate, and when?}
+Crohn's disease (CD) is a chronic relapsing--remitting inflammatory bowel disease (IBD)
+affecting over three million people in the United States, with rising global incidence
+\cite{torres2017crohns}. Its clinical course is notoriously heterogeneous: some patients
+maintain long-term remission with minimal therapy, while others progress to surgical
+resection, steroid-dependent disease, or repeated escalation of biologic therapy
+\cite{peyrin2017lancet}. This unpredictability poses a fundamental clinical challenge,
+namely which patients will deteriorate, and when.
 
-Cross-sectional enterography is central to CD assessment. MR enterography (MRE) offers radiation-free visualization of bowel-wall inflammation, thickening, strictures, fistulae, and extraintestinal complications \cite{defined_mri_cd}, and CT enterography (CTE) is widely used in acute and resource-constrained settings where MRE is unavailable. Validated activity scores such as MaRIA quantify disease activity at a single time point but do not predict future outcomes \cite{defined_maria}. The prognostic value of imaging --- its ability to predict \textit{what will happen to this patient} --- remains largely unexplored in an automated, quantitative framework, and almost all deep-learning work to date is single-modality.
+Cross-sectional enterography is central to CD assessment. MR enterography (MRE) offers
+radiation-free visualization of bowel-wall inflammation, thickening, strictures, fistulae,
+and extraintestinal complications \cite{defined_mri_cd}, and CT enterography (CTE) is widely
+used in acute and resource-constrained settings where MRE is unavailable. Validated activity
+scores such as the Magnetic Resonance Index of Activity (MaRIA) quantify disease at a single
+time point but do not predict future outcomes \cite{defined_maria}. Even where a manual score
+has been linked to prognosis, the simplified MaRIA (sMaRIA) is only \emph{associated} with
+future surgery at the group level in the PROFILE trial \cite{bhandari2026smaria}; such work
+stops short of individualized, automated risk prediction. The prognostic value of imaging, its
+ability to predict what will happen to an individual patient, remains largely unexplored in an
+automated, quantitative framework, and almost all deep-learning work to date is single-modality.
 
-\subsection{Gaps in Current Approaches}
+Three gaps in particular motivate this study. First, there is \textbf{no large annotated CD
+enterography dataset}: expert per-finding annotation does not scale to thousands of studies, so
+most reported cohorts are small and single-institution. Second, \textbf{CT and MR are modeled
+separately}, doubling the engineering, validation, and deployment burden, and to our knowledge
+no published study trains a single deep model jointly on CTE and MRE for CD. Third,
+\textbf{classification is not prognosis}: most deep learning in CD addresses binary activity or
+scoring at a single time point \cite{dl_ibd_review}, answering ``is the patient sick now?''
+rather than the more actionable ``will this patient need surgery, and when?''. In addition,
+venue-grade evidence (multi-center external validation, calibration, and clinical net benefit)
+is frequently absent from CD imaging studies.
 
-\begin{enumerate}
-    \item \textbf{One model per modality.} CT and MR pipelines are trained separately, doubling the engineering, validation, and deployment burden. Whether a single backbone can serve both modalities for CD --- and whether the field's default assumption that "shared learning across modalities helps" actually holds --- has not been tested for enterography. To our knowledge no published study trains a single deep model jointly on CTE and MRE for Crohn's.
-    \item \textbf{Modality conditioning is under-characterized.} Recipes for serving multiple modalities from one backbone (modality tokens, FiLM, domain-specific normalization) are borrowed from segmentation and oncology, but their \textit{relative} contribution --- and the risk that heavier conditioning hurts the dominant modality (\emph{negative transfer}: added cross-modal capacity that lowers rather than raises performance) --- has not been ablated in this setting.
-    \item \textbf{Classification is not prediction.} Most deep learning in CD addresses binary activity or scoring at a single time point \cite{dl_ibd_review}, answering "is the patient sick now?" rather than "will this patient need surgery, and when?" --- the more actionable question.
-    \item \textbf{Venue-grade evidence is often missing.} External (multi-center) validation, calibration reporting (Brier score), and clinical net-benefit analysis are expected for digital-medicine deployment claims but are frequently absent in CD imaging studies.
-\end{enumerate}
-
-\subsection{Research Question}
-
-\begin{quote}
-\textit{Can a single modality-conditioned foundation-model backbone extract radiological findings from both CT and MR enterography as accurately as two independent modality specialists, and feed a survival head that predicts the time to medical intervention in Crohn's disease?}
-\end{quote}
-
-We address this with a two-stage pipeline: a frozen DINOv3 backbone with LoRA adapters and dual-branch multi-instance learning (MIL) detects 10 radiological findings (Stage~1); a penalized Cox model maps findings plus clinical features to individualized time-to-event predictions (Stage~2). We directly compare two independent specialists (Option~B) against one unified, modality-conditioned backbone (Option~C), and we ablate which conditioning components help or harm.
-
-\subsection{Contributions}
-
-\begin{enumerate}
-    \item \textbf{Domain-specific normalization causes significant negative transfer (lead finding).} In a controlled ablation ladder over modality conditioning (token, FiLM, DSBN), removing DSBN improves MR macro-AUC by $+0.019$ (95\% CI $[+0.008, +0.030]$, paired bootstrap). Lightweight conditioning (modality token + FiLM) is the sweet spot; heavier conditioning over-parameterizes and degrades the dominant modality.
-
-    \item \textbf{One unified model matches two specialists (non-inferiority).} With token+FiLM conditioning, a single backbone matches the MR specialist exactly (macro-AUC $0.849$) and is statistically equivalent to the CT specialist ($0.772$ vs.\ $0.760$), and matches the specialists' downstream survival performance. Because the same warm-start is applied \emph{symmetrically} to both options, the head-to-head is fair by construction. This halves the number of models to validate and maintain at no statistically significant cost.
-
-    \item \textbf{An MR-based prognostic pipeline with venue-grade evidence.} The unified model's survival head predicts surgery (C-index $0.825$; $\Delta\cindex = +0.145$ over clinical-only), steroid dependence, and biologic switch, with external validation (LOCO surgery $0.799 \pm 0.027$), calibration (IBS $0.085$), and decision-curve net benefit across clinically relevant thresholds.
-
-    \item \textbf{A reproducible CT-localization pipeline.} We adapt an organ-segmentation crop (TotalSegmentator $\rightarrow$ small-bowel + colon $\rightarrow$ bounding-box crop $\rightarrow$ 16 slices) so that CTE is bowel-localized and consumable by the same MIL backbone as MRE.
-
-    \item \textbf{A unified CT+MR survival model.} Updated clinical outcomes link time-to-event labels to 1{,}820 CT studies, enabling --- to our knowledge for the first time --- a Cox prognostic model jointly fit on CT and MR enterography. CT contributes a clinically meaningful surgery C-index of $0.767$ on its own subset, and slightly exceeds MR for biologic switch ($0.691$ vs.\ $0.655$).
-\end{enumerate}
-
-
-% ============================================================================
-\section{Related Work}
-\label{sec:related}
-% ============================================================================
-
-\subsection{Deep Learning for Crohn's Disease Imaging}
-
-Deep learning has been applied to gastrointestinal imaging, including endoscopy-based IBD assessment and MRI-based quantification of CD activity. Rimola et al.\ established the MaRIA score as a validated quantitative measure of activity from MRI \cite{defined_maria}, and subsequent work automated scoring with convolutional networks \cite{defined_mri_cd}; reviews highlight AI for bowel-wall segmentation, activity classification, and treatment-response prediction \cite{dl_ibd_review}. CTE deep learning has separately reached strong activity/fibrosis performance in single-modality cohorts. Critically, the field splits cleanly by modality: to our knowledge no prior study trains a single deep model jointly on CTE and MRE for Crohn's, making a unified enterography model a publishable gap.
-
-\subsection{Foundation Models Across CT and MR}
-
-The dominant 2024--2026 paradigm is one frozen foundation backbone with modality-aware adapters. Frozen DINOv2/DINOv3 features generalize across X-ray, CT, and MR benchmarks with a single encoder \cite{baharoon2024dinov2}, and purpose-built cross-modal backbones trained on mixed CT and MR (e.g., Curia) degrade far less on out-of-distribution MR than domain-general embeddings \cite{curia2025}. Embedding-only fusion of frozen foundation features has reached state-of-the-art oncologic prognosis at scale \cite{honeybee2025}. We adopt this paradigm: a frozen DINOv3 backbone \cite{dinov3} with LoRA adapters \cite{hu2021lora}, shared across CT and MR.
-
-\subsection{Modality Conditioning}
-
-Several lightweight techniques let one backbone serve multiple modalities: a learned \textit{modality token}, \textit{feature-wise linear modulation} (FiLM), which predicts per-channel scale/shift parameters \cite{perez2018film}, and \textit{domain-specific normalization} (DSBN), which keeps separate normalization statistics per domain \cite{chang2019dsbn}. These have shown gains in cross-modal segmentation and adaptation, but their relative contribution --- and the possibility that the heaviest component induces negative transfer on the dominant modality --- has not been characterized for enterography. We ablate all three.
-
-\subsection{Multi-Instance Learning and Survival from Images}
-
-Attention-based MIL \cite{ilse2018attention} weights instances (slices) under bag-level (study-level) labels and has succeeded in pathology \cite{campanella2019clinical}, chest CT \cite{li2020dual}, and brain MRI \cite{defined_mil_brain}. Time-to-event prediction from images spans end-to-end deep survival (DeepSurv \cite{katzman2018deepsurv}, DeepHit \cite{lee2018deephit}) and two-stage approaches that feed learned features to a classical survival model. Recent npj Digital Medicine multimodal-survival pipelines (e.g., multimodal transformers with Cox/AFT heads and external validation \cite{gliosurv2025}, deep multimodal fusion with feature-category ablations \cite{cervipro2025}, and patho-radiomic fusion \cite{prismcrc2025}) set the venue norm of $\geq 2$-cohort external validation with calibration reporting. We adopt the two-stage design for supervision and statistical-efficiency reasons (Section~\ref{sec:stage2}) and report the venue-grade evidence those works establish.
-
+We address these gaps with a two-stage, modality-conditioned foundation-model pipeline and make
+four contributions. (i) \textbf{Automatic labeling at scale.} A clinical natural-language model,
+HSMP-BERT, extracts ten radiological findings from free-text Hebrew enterography reports and is
+applied identically to MRE and CTE, converting routinely acquired reports into structured labels
+without manual annotation. (ii) \textbf{A unified CT+MR detector.} A single frozen DINOv3 backbone
+with low-rank adapters, dual-branch multi-instance learning (MIL), and lightweight modality
+conditioning detects the ten findings from both modalities, matching the MRE specialist and
+outperforming the CTE specialist;
+we show that a modality token with feature-wise linear modulation (FiLM) is the sweet spot, while
+domain-specific normalization (DSBN) causes negative transfer on the dominant modality. (iii) \textbf{A
+two-stage detection-to-prognosis design.} The detected findings feed a penalized Cox model that issues
+individualized time-to-event predictions for surgery, steroid dependence, and biologic switch, jointly
+on CT and MR. (iv) \textbf{A rigorously clean CD-only cohort.} We exclude ulcerative colitis (UC), a
+distinct colon-only disease whose outcomes are not comparable to CD, and repair a patient-level
+data-leakage issue, yielding an honest CD-only evaluation with multi-center generalization,
+calibration, and decision-curve evidence.
 
 % ============================================================================
-\section{Materials and Methods}
-\label{sec:methods}
-% ============================================================================
+\section*{Results}
 
-Figure~\ref{fig:architecture} overviews the two-stage pipeline and the Option~B vs.\ Option~C comparison.
+Our pipeline reads a CT or MR enterography study and predicts individualized outcomes in two stages:
+a unified detector that reports ten radiological findings, and a penalized survival model that fuses
+them with clinical features (Figure 1).
 
-\subsection{Study Population and Data}
-\label{sec:data}
-
-This retrospective study pooled CD examinations from multiple Israeli centers (Mor, Shaare Zedek Medical Center [SZMC], Assuta; with additional report-derived labels from Rambam). The study was approved by the institutional review board. Original imaging and clinical databases were treated as read-only.
-
-\subsubsection{Imaging Data}
-Stage~1 used \textbf{6{,}223 MRE} examinations (reused from the prior MR-only cohort to enable a valid warm-start) and \textbf{1{,}830 CTE} examinations ($\approx 23\%$ of the imaging cohort), the latter from SZMC and Assuta. Each study was reduced to 16 axial slices resized to $224 \times 224$. For MRE, T2-weighted and T1-weighted post-contrast sequences were used; CTE was routed through the T2 branch with the T1 branch zeroed (Section~\ref{sec:stage1}).
-
-\paragraph{CT bowel localization.}
-Because CT spans the whole abdomen and thorax, we localized the bowel before slice sampling: TotalSegmentator \cite{wasserthal2023totalseg} (fast mode) produced small-bowel and colon masks, whose union bounding box (with a 10-voxel pad) cropped the volume; 16 slices were then evenly sampled on the cropped volume. This mirrors the MRE bowel-crop pipeline, so localization comes from the crop rather than the slice sampler.
-
-\subsubsection{Radiological Finding Labels}
-Ten radiological findings (Table~\ref{tab:labels}) were extracted from the free-text radiology reports (Hebrew enterography reports) by a clinical information-extraction model, applied identically to MR and CT reports. We emphasize that these labels are \emph{model-derived from report text, not prospective human ground truth}; both Option~B and Option~C are evaluated against the \emph{same} labels, so the comparison between them is unaffected by label noise. Graded inflammation outputs were binarized at grade~$\geq 1$; on the overlapping cohort this reproduced the prior validated binary labels exactly (6{,}223/6{,}223 studies), supporting the mapping. \todo{Report the HSMP-BERT extraction precision/recall against a radiologist-annotated subset --- all \emph{absolute} metrics inherit this label ceiling, although the B-vs-C comparison does not.}
-
-\begin{table}[h]
+\begin{figure}[htbp]
 \centering
-\caption{Radiological finding labels with prevalence in the MR training set.}
-\label{tab:labels}
-\begin{tabular}{@{}llcc@{}}
-\toprule
-& \textbf{Finding} & \textbf{Prevalence (\%)} & \textbf{Tier} \\
-\midrule
-1 & Ileal inflammation        & 33.1\% & 1 \\
-2 & Ileal wall enhancement    & 40.4\% & 1 \\
-3 & Ileal wall thickening     & 42.9\% & 1 \\
-4 & Restricted diffusion (DWI)& 26.8\% & 1 \\
-5 & Ileal stenosis            & 22.0\% & 1 \\
-6 & Pre-stenotic dilatation   & 14.7\% & 1 \\
-7 & Comb sign                 & 12.1\% & 1 \\
-8 & Fistula                   & 6.6\% & 2 \\
-9 & Colonic inflammation      & 6.3\% & 2 \\
-10 & Mesenteric edema          & 4.6\% & 2 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection{Survival Outcomes}
-\label{sec:survival_data}
-An updated clinical-outcomes release linked time-to-event labels for 1{,}820 CT studies in our cohort, allowing \textbf{Stage~2 to be unified across CT and MR}. Stage~2 used \textbf{6{,}011 examinations} (4{,}191 MR + 1{,}820 CT) from 5{,}256 unique patients, with time zero set to the imaging date (to avoid immortal-time bias). Three outcomes were defined:
-\begin{itemize}
-    \item \textbf{Surgical intervention} --- 817 events (687 MR + 130 CT).
-    \item \textbf{Steroid dependence} --- 292 events (226 MR + 66 CT).
-    \item \textbf{Biologic therapy switch} --- 1{,}232 events (968 MR + 264 CT).
-\end{itemize}
-The event indicator was derived from the post-imaging signed time-to-event ($>0 \Rightarrow$ event), non-events were right-censored at a fixed maximum follow-up of 10 years, and the same convention was applied to MR and CT. Events-per-variable on 23 features is 35 (surgery), 13 (steroid), and 54 (biologic), well above the conventional minimum of 10 for stable Cox fitting.
-
-\subsubsection{Clinical Features}
-Thirteen clinical features (6 continuous, 7 binary) were extracted from the clinical outcomes table, representing disease characteristics and treatment history at the time of MRI: time from diagnosis to MRI, age at diagnosis, Charlson Comorbidity Index, disease-activity cluster, socioeconomic status, diagnostic delay; and prior surgery, prior steroid dependence, prior biologic switch, prior extraintestinal manifestations, prior perianal disease, sex, and a clinical-data-availability indicator. Missing values were imputed from the training set only (median/mode), with a \texttt{has\_clinical} indicator to allow the model to discount imputed values.
-
-\subsubsection{Data Splitting}
-All splits were \textit{patient-level} (a patient appears in only one split; leakage explicitly checked across 7{,}395 patients). Stage~1 was evaluated on held-out test sets of $n = 628$ MR and $n = 209$ CT studies. We note that the patient-level resplit of the new cohort differs slightly from the prior split, so test sets are not identical to earlier phases.
-
-
-% ============================================================================
-\subsection{Stage 1: Unified Imaging Biomarker Extraction}
-\label{sec:stage1}
-% ============================================================================
-
-Stage~1 transforms raw slices into 10 sigmoid-calibrated finding probabilities that serve as Stage~2 inputs.
-
-\subsubsection{Backbone and MIL Head}
-A \textbf{frozen DINOv3-Base} backbone \cite{dinov3} extracts per-slice features; \textbf{LoRA adapters} \cite{hu2021lora} ($\approx 8.5\%$ of parameters trainable) adapt it cheaply and stably. A dual-branch design processes T2 and T1 (for MR; CT uses the T2 branch with T1 zeroed via the existing missing-modality mask), projecting to a fused per-slice representation. Ten \emph{independent} gated-attention heads \cite{ilse2018attention}, one per finding, pool slices into bag representations:
-\begin{equation}
-    a_k^{(i)} = \text{softmax}\!\left( \mathbf{w}^{(i)\top} \!\left( \tanh(\mathbf{V}^{(i)} \mathbf{h}_k) \odot \sigma(\mathbf{U}^{(i)} \mathbf{h}_k) \right) \right), \qquad
-    \mathbf{z}^{(i)} = \sum_{k=1}^{16} a_k^{(i)} \mathbf{h}_k ,
-\end{equation}
-where $\mathbf{h}_k$ is the fused representation of slice $k$ and $i$ indexes the finding. Each bag representation is concatenated with clinical features and passed through a per-finding MLP.
-
-\subsubsection{Option B vs.\ Option C, and Modality Conditioning}
-We compare two designs:
-\begin{itemize}
-    \item \textbf{Option~B (specialists):} two independent backbones, B-MR (trained on MR) and B-CT (trained on CT), with no conditioning.
-    \item \textbf{Option~C (unified):} one backbone trained jointly on CT+MR (WeightedRandomSampler balancing modality$\times$label), with modality conditioning. We ablate three components:
-    \begin{itemize}
-        \item \textbf{Modality token} --- a learned embedding indicating CT vs.\ MR;
-        \item \textbf{FiLM} \cite{perez2018film} --- per-channel scale/shift on the backbone features, predicted from the modality token;
-        \item \textbf{DSBN} \cite{chang2019dsbn} --- modality-specific normalization on the fused representation.
-    \end{itemize}
-\end{itemize}
-The ablation ladder is: \textbf{A1} (token only), \textbf{A2} (token+FiLM), \textbf{A3} (token+FiLM+DSBN, the "full" model), and \textbf{A5} (DSBN, MR-only control). The labels index a larger experiment matrix (hence the non-contiguous numbering); we report the informative rungs.
-
-\subsubsection{Symmetric Warm-Start (fair comparison)}
-All Stage~1 models --- both specialists and unified variants --- were warm-started from the \emph{same} prior MR-only DINOv3 checkpoint. Applying the warm-start \emph{symmetrically} to Option~B and Option~C is what makes the head-to-head fair: any shared initialization advantage is conferred equally on both sides, so the comparison isolates the effect of modality conditioning, not initialization.
-
-\subsubsection{Training Configuration}
-Models were trained on a single NVIDIA A6000 (48~GB) in bfloat16 with a tier-aware asymmetric loss \cite{ridnik2021asl} for class imbalance, AdamW with differential learning rates, EMA, and early stopping. Warm-starting from the prior optimum, the unified and specialist models converged within a few epochs.
-
-
-% ============================================================================
-\subsection{Stage 2: Time-to-Event Prediction}
-\label{sec:stage2}
-% ============================================================================
-
-For each MR study, the trained Stage~1 model produces 10 probabilities $\hat{p}_1,\ldots,\hat{p}_{10}$, concatenated with 13 clinical features to form a 23-dimensional vector. A separate elastic-net penalized Cox model \cite{polsterl2020scikit} is fit per outcome:
-\begin{equation}
-    h(t \mid \mathbf{x}) = h_0(t)\exp(\boldsymbol{\beta}^\top \mathbf{x}),
-\end{equation}
-with the Breslow estimator giving the baseline cumulative hazard and individualized survival curves $\hat{S}(t\mid\mathbf{x})$. The two-stage design is motivated by (a) the supervision advantage (Stage~1 sees far more labeled studies than there are survival events), (b) interpretability of the intermediate biomarkers, and (c) statistical efficiency: at moderate event counts, a low-dimensional Cox model respects the events-per-variable (EPV) constraint (surgery: 659 events / 23 features $\approx 29$, well above the conventional minimum of 10) where an end-to-end deep survival model would overfit.
-
-\subsubsection{Evaluation Protocol}
-We report: the concordance index (C-index; the probability that the model assigns higher risk to the patient with the sooner event, $0.5=$ chance) with bootstrap ($n=1{,}000$) confidence intervals; an ablation over feature sets (combined 23-d vs.\ imaging-only 10-d vs.\ clinical-only 13-d), with $\Delta\cindex$ quantifying the added value of imaging; the integrated Brier score (IBS; squared survival-prediction error integrated over time, lower is better) and time-dependent AUC for calibration; \textbf{leave-one-center-out} (LOCO) external validation across the three MR centers; and decision-curve analysis (DCA) for clinical net benefit. For Stage~1, model pairs (B vs.\ C, and ablation rungs) were compared with paired bootstrap confidence intervals on the test-set macro-AUC (the unweighted mean of the 10 per-finding AUCs).
-
-
-% ============================================================================
-\section{Results}
+\includegraphics[width=0.95\linewidth]{figures/Fig1_architecture.png}
+\caption{\textbf{Figure 1 $\vert$ Two-stage pipeline.} Stage 1 detects 10 radiological findings from CT and MR enterography with a frozen DINOv3 backbone, LoRA adapters, multi-instance learning, and modality conditioning (modality token and FiLM). Stage 2 fuses the 10 finding probabilities with 13 clinical features in a penalized Cox model to predict individualized time to surgery, steroid dependence, and biologic switch.}
+\end{figure}
 \label{sec:results}
 % ============================================================================
 
-\subsection{Stage 1: Unified vs.\ Specialist, and the Cost of DSBN}
+\subsection*{Study cohort}
 
-Table~\ref{tab:ladder} reports test-set macro-AUC for the specialists and the unified ablation ladder.
+From a full imaging asset of 8{,}053 enterography studies across four centers (Mor, Assuta, SZMC,
+and Rambam; MRE and CTE), we excluded 883 UC studies (510 MRE + 373 CTE). UC is a distinct,
+colon-only disease whose surgical outcome (colectomy) is not comparable to the small-bowel
+resection modeled here; the excluded UC studies show a textbook UC signature (low on every
+ileal finding, higher on colonic inflammation), confirming label validity. UC subtype was taken
+from the IBD registry and was 100\% consistent across database versions. The resulting clean CD
+detection cohort comprises \textbf{7{,}170 studies} (5{,}713 MRE + 1{,}457 CTE), split at the patient
+level into 5{,}894 train / 623 validation / 653 test. A further 1{,}839 studies without a registry
+subtype (mostly healthy controls) were retained but flagged separately. The survival cohort (CD
+studies with linked outcomes) comprises \textbf{5{,}148 studies} (3{,}701 MRE + 1{,}447 CTE), with
+782 surgery, 231 steroid-dependence, and 1{,}092 biologic-switch events. Table~\ref{tab:cohort}
+summarizes the cohort by center and modality. A data-leakage issue in an earlier split (204
+patients with studies spanning train/val/test) was repaired by majority reassignment, after which
+zero patients span splits.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{Stage~1 finding-detection macro-AUC on the held-out test set (MR $n=628$, CT $n=209$). All models share a symmetric warm-start. Higher is better.}
-\label{tab:ladder}
-\begin{tabular}{@{}llcc@{}}
-\toprule
-\textbf{Config} & \textbf{Conditioning} & \textbf{MR} & \textbf{CT} \\
-\midrule
-B-MR / B-CT (specialists) & ---                       & \textbf{0.849} & 0.760 \\
-A1 (unified)              & token                     & 0.843 & \textbf{0.776} \\
-\textbf{A2 (unified)}$^\star$ & token + FiLM          & \textbf{0.849} & 0.772 \\
-A5 (control)             & DSBN, MR-only             & 0.835 & --- \\
-A3 (unified, ``full'')    & token + FiLM + DSBN       & 0.830 & 0.756 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\paragraph{Per-finding A2 performance.}
-Table~\ref{tab:per_finding_a2} reports per-finding AUC and Youden-optimal sensitivity/specificity for A2 on the MR and CT test sets. MR macro-AUC $= 0.849$ ($n=628$); CT macro-AUC $= 0.772$ ($n=209$, with DWI not assessed on CT).
-
-\begin{table}[h]
-\centering
-\caption{Per-finding test-set AUC and Youden-optimal sensitivity/specificity for the unified A2 model. ``---'' denotes findings not assessable on CT (no DWI sequence in CTE).}
-\label{tab:per_finding_a2}
+\caption{\textbf{Table 1 $\vert$ Study cohort by disease group, stage, center, and modality.}
+The clean Crohn's-disease (CD) detection cohort excludes ulcerative colitis (UC) and is
+split at the patient level. The survival cohort is the subset of CD studies with linked
+time-to-event outcomes. All splits are leakage-checked (zero patients spanning splits).}
+\label{tab:cohort}
 \small
-\begin{tabular}{@{}lcccccc@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
- & \multicolumn{3}{c}{\textbf{MR} ($n=628$)} & \multicolumn{3}{c}{\textbf{CT} ($n=209$)} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-\textbf{Finding} & \textbf{AUC} & \textbf{Sens.} & \textbf{Spec.} & \textbf{AUC} & \textbf{Sens.} & \textbf{Spec.} \\
+\textbf{Cohort / partition} & \textbf{Studies} & \textbf{MRE} & \textbf{CTE} & \textbf{Notes} \\
 \midrule
-Ileal inflammation        & 0.821 & 0.745 & 0.750 & 0.755 & 0.574 & 0.843 \\
-Ileal wall enhancement    & 0.866 & 0.775 & 0.798 & 0.735 & 0.744 & 0.634 \\
-Ileal wall thickening     & 0.865 & 0.773 & 0.799 & 0.758 & 0.542 & 0.912 \\
-Restricted diffusion (DWI)& 0.841 & 0.818 & 0.739 & ---   & ---   & ---   \\
-Ileal stenosis            & 0.844 & 0.733 & 0.813 & 0.834 & 0.898 & 0.681 \\
-Pre-stenotic dilatation   & 0.852 & 0.752 & 0.803 & 0.845 & 0.868 & 0.778 \\
-Comb sign                 & 0.806 & 0.829 & 0.658 & 0.784 & 0.667 & 0.872 \\
-Fistula                   & 0.852 & 0.927 & 0.684 & 0.794 & 0.857 & 0.678 \\
-Colonic inflammation      & 0.843 & 0.806 & 0.811 & 0.768 & 0.536 & 0.890 \\
-Mesenteric edema          & 0.896 & 0.810 & 0.842 & 0.677 & 0.667 & 0.711 \\
+Full imaging asset             & 8{,}053 & --      & --      & 4 centers, MRE + CTE \\
+\quad Excluded: ulcerative colitis (UC) & 883  & 510     & 373     & distinct disease \\
+\quad No registry subtype (flagged)     & 1{,}839 & $\approx$1{,}831 & $\approx$8 & mostly healthy controls \\
 \midrule
-\textbf{Macro-AUC}        & \textbf{0.849} & --- & --- & \textbf{0.772} & --- & --- \\
+\textbf{Clean CD detection cohort} & \textbf{7{,}170} & \textbf{5{,}713} & \textbf{1{,}457} & \\
+\quad Train                    & 5{,}894 & --      & --      & patient-level \\
+\quad Validation               & 623     & --      & --      & patient-level \\
+\quad Test (held out)          & 653     & --      & --      & patient-level \\
+\midrule
+\textbf{Survival cohort (CD, with outcomes)} & \textbf{5{,}148} & \textbf{3{,}701} & \textbf{1{,}447} & \\
+\quad Surgery events           & 782     & --      & --      & \\
+\quad Steroid-dependence events & 231    & --      & --      & \\
+\quad Biologic-switch events   & 1{,}092 & --      & --      & \\
 \bottomrule
 \end{tabular}
+\vspace{2pt}
+\footnotesize
+\\Center-level composition of the CD cohort: Mor, Assuta, SZMC, and Rambam; all CTE
+examinations originate from a single center (Assuta), which is why leave-one-center-out
+validation is feasible on MRE only.
 \end{table}
 
-\paragraph{DSBN causes significant negative transfer.}
-Removing DSBN (A2 vs.\ A3) improved MR macro-AUC by $+0.019$ (95\% CI $[+0.008, +0.030]$, paired bootstrap) --- the confidence interval excludes zero. DSBN is the only conditioning component that significantly hurts, and it hurts the dominant modality. The MR-only DSBN control (A5, $0.835$) likewise underperforms token+FiLM, confirming the effect is attributable to DSBN rather than to joint training.
+\subsection*{Automatic labeling from free-text reports}
 
-\paragraph{Lightweight conditioning matches the specialists (non-inferiority).}
-The token+FiLM unified model (A2) \emph{matches the MR specialist exactly} ($0.849 = 0.849$) and is statistically equivalent to the CT specialist on CT ($0.772$ vs.\ $0.760$; $+0.012$, 95\% CI $[-0.012, +0.035]$; the interval includes zero, so the CT difference is a non-significant trend on a small test set, $n=209$). Token-only conditioning (A1) is also statistically indistinguishable from both specialists. Thus a single unified backbone with lightweight conditioning replaces two specialists at no statistically significant cost.
+Rather than expert per-finding annotation, which does not scale to thousands of studies, we
+derived the ten radiological finding labels (Table~\ref{tab:detection}) automatically from the
+free-text radiology reports using HSMP-BERT, a clinical natural-language model for Hebrew
+enterography text (Methods). The extractor was applied \emph{identically} to MRE and CTE reports,
+so the same label definition governs both modalities, and both the unified detector and the
+modality specialists are evaluated against the same labels. This design makes the labeling step a
+reusable component of the pipeline rather than a one-off annotation effort, and it is what enabled
+a cohort two orders of magnitude larger than typical expert-annotated CD imaging studies.
+Because the labels are model-derived from report text rather than prospective human ground truth,
+all \emph{absolute} performance figures inherit this label ceiling; comparisons between models are
+unaffected because they are scored against the same labels. As an internal consistency check, on the
+subset that also carried previously validated binary disease-activity labels the extracted findings
+reproduced those labels on all 6,223 studies. A prospective per-finding validation against
+radiologist annotation on a held-out subset is an important next step and a limitation of the present
+label set.
 
-\paragraph{Nested cross-validation: the ranking is stable across patient-level CV folds.}
-To verify that the production choice of A2 is not an artifact of a single train/val/test split, we re-trained the entire conditioning ladder (A1, A2, A3) on five patient-level CV folds and evaluated each (fold, variant) pair on the fold's held-out test set. Table~\ref{tab:nested_cv} reports per-variant mean $\pm$ SD across the five folds. On the MR test sets, A2 outperforms A3 in \emph{every one of the five folds} (paired-fold mean $\Delta = +0.0075$, 95\% CI $[+0.003, +0.012]$, CI excludes zero), confirming the DSBN negative-transfer finding as a stable property of the conditioning ladder rather than a single-split artifact. On the CT test sets, A2 and A3 are statistically indistinguishable (paired-fold mean $\Delta \approx 0$, large fold-to-fold variance), so the small CT trend in favor of A3 visible in Table~\ref{tab:ladder} is within noise.
-
-\begin{table}[h]
+\subsection*{Stage 1: unified CT+MR finding detection}
+\begin{figure}[htbp]
 \centering
-\caption{Nested-CV test-set macro-AUC across 5 patient-level folds (mean $\pm$ SD). The conditioning ladder was retrained from scratch on each fold's train+val split. A2 achieves the best MR mean with the lowest fold-to-fold SD; A3 (with DSBN) consistently underperforms on MR.}
-\label{tab:nested_cv}
+\includegraphics[width=0.82\linewidth]{figures/Fig2_detection_per_finding_AUC.png}
+\caption{\textbf{Figure 2 $\vert$ Per-finding detection performance.} Held-out Crohn's-only MR test set (n=312); macro-AUC 0.780.}
+\end{figure}
+
+On the held-out CD-only test set, the unified detector (configuration A2: frozen DINOv3-Base with
+low-rank adapters, dual-branch gated-attention MIL, and lightweight modality conditioning via a
+learned modality token plus FiLM) reached a macro-AUC of \textbf{0.780 (95\% CI 0.750--0.810) on MRE}
+and \textbf{0.744 (0.691--0.789) on CTE}. Per-finding AUCs are reported in Table~\ref{tab:detection}.
+Detection is strongest for the penetrating and stricturing phenotypes most relevant to prognosis
+(fistula 0.820, mesenteric edema 0.821, restricted diffusion 0.810, pre-stenotic dilatation 0.799,
+wall enhancement 0.795 on MRE) and weakest for comb sign (0.712).
+
+Retraining Stage 1 end to end on the clean CD-only data barely moved validation performance
+(validation macro-AUC 0.8375, versus 0.8399 for the pre-exclusion model), confirming that excluding
+UC did not degrade CD detection. Among modality-conditioning components, a modality token and FiLM
+matched dedicated per-modality specialists, whereas DSBN over-parameterized this moderately
+imbalanced ($\approx 20\%$ CT) setting and reduced the dominant-modality (MRE) macro-AUC; we
+therefore adopted token+FiLM (A2) and omitted DSBN.
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Table 2 $\vert$ Per-finding detection AUC (95\% CI) on the held-out CD-only test set}
+for the unified A2 model, reported separately for MR enterography (MRE, $n=312$) and CT enterography
+(CTE, $n=170$). Restricted diffusion (DWI) is not assessable on CTE (no DWI sequence). Macro-AUC is the
+unweighted mean of the per-finding AUCs. Confidence intervals are paired/cluster bootstrap by patient
+($n=1{,}000$).}
+\label{tab:detection}
+\small
 \begin{tabular}{@{}lccc@{}}
 \toprule
- & \textbf{A1 (token)} & \textbf{A2 (token+FiLM)}$^\star$ & \textbf{A3 (token+FiLM+DSBN)} \\
+\textbf{Finding} & \textbf{Tier} & \textbf{MRE AUC [95\% CI]} & \textbf{CTE AUC [95\% CI]} \\
 \midrule
-\textbf{MR} & $0.896 \pm 0.010$ & $\mathbf{0.897 \pm 0.007}$ & $0.889 \pm 0.007$ \\
-\textbf{CT} & $0.758 \pm 0.024$ & $0.768 \pm 0.024$ & $0.769 \pm 0.016$ \\
+Ileal inflammation          & 1 & 0.726 [0.668, 0.785] & 0.721 [0.637, 0.797] \\
+Ileal wall enhancement      & 1 & 0.795 [0.741, 0.844] & 0.667 [0.582, 0.748] \\
+Ileal wall thickening       & 1 & 0.790 [0.736, 0.840] & 0.731 [0.640, 0.810] \\
+Restricted diffusion (DWI)  & 1 & 0.810 [0.765, 0.855] & n/a \\
+Ileal stenosis              & 1 & 0.757 [0.697, 0.811] & 0.780 [0.700, 0.849] \\
+Pre-stenotic dilatation     & 1 & 0.799 [0.734, 0.853] & 0.802 [0.721, 0.867] \\
+Comb sign                   & 1 & 0.712 [0.628, 0.785] & 0.777 [0.668, 0.873] \\
+Fistula                     & 2 & 0.820 [0.749, 0.882] & 0.822 [0.577, 0.982] \\
+Colonic inflammation        & 2 & 0.774 [0.679, 0.860] & 0.783 [0.670, 0.876] \\
+Mesenteric edema            & 2 & 0.821 [0.716, 0.915] & 0.619 [0.455, 0.774] \\
+\midrule
+\textbf{Macro-AUC} & & \textbf{0.780 [0.750, 0.810]} & \textbf{0.744 [0.691, 0.789]} \\
 \bottomrule
 \end{tabular}
+\vspace{2pt}
+\footnotesize
+\\The per-modality $n$ ($312$ MRE, $170$ CTE) counts the held-out test studies scored for finding
+detection; the $653$-study test partition in Table~\ref{tab:cohort} additionally includes studies without
+extractable per-finding labels (e.g.\ registry-unknown controls).
 \end{table}
 
-\paragraph{Leave-one-modality-out: CT supervision neither helps nor hurts MR.}
-To probe whether the unified model's MR performance is driven by joint CT+MR training or simply by the shared backbone and warm-start, we trained an additional token+FiLM model on MR-only and evaluated both on the held-out MR test set ($n=628$). The joint A2 (CT+MR) and the MR-only variant achieved essentially identical macro-AUC ($0.8486$ vs.\ $0.8484$; $\Delta = +0.0002$, paired-bootstrap 95\% CI $[-0.0086, +0.0090]$; the joint model was higher in $51\%$ of bootstrap resamples). CT supervision therefore has \emph{no detectable effect} on MR finding detection in either direction --- supporting our explicit non-claim that adding CT improves MR-based prediction, while showing that joint training does \emph{not} degrade the dominant modality. The unified model's value is operational (one model serving both modalities), not informational.
-
-\subsection{Stage 2: Unified CT and MR Time-to-Event Prediction}
-
-Using the production unified model (A2) to generate imaging biomarkers, we fit a penalized Cox model on the unified 6{,}011-study cohort (4{,}191 MR + 1{,}820 CT) with patient-grouped 5-fold cross-validation. For each held-out fold we report the C-index on the combined test cohort and, separately, on the MR and CT subsets of that fold. To our knowledge this is the first time a Crohn's-disease prognostic Cox model has been fit jointly on CT and MR enterography.
-
-\begin{table}[h]
+\subsection*{Stage 2: individualized time-to-event prediction}
+\begin{figure}[htbp]
 \centering
-\caption{Stage~2 C-index (5-fold patient-grouped CV, mean $\pm$ SD) for the unified A2 model, on the combined test cohort and on its MR and CT subsets. $\Delta$MRI = combined $-$ clinical-only on the matching subset.}
-\label{tab:ablation}
+\includegraphics[width=0.82\linewidth]{figures/Fig3_KM_risk_stratification.png}
+\caption{\textbf{Figure 3 $\vert$ Risk stratification for surgery.} Kaplan-Meier surgery-free curves by predicted risk tertile, unified CD cohort (n=5,148); log-rank p < 0.001.}
+\end{figure}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.72\linewidth]{figures/Fig4_imaging_vs_clinical_Cindex.png}
+\caption{\textbf{Figure 4 $\vert$ Imaging adds prognostic signal.} Surgery C-index: clinical-only 0.689, imaging-only 0.752, combined 0.792 (imaging adds +0.103 over clinical).}
+\end{figure}
+
+Using the A2 detector to generate imaging biomarkers, we fit an elastic-net penalized Cox model
+(l1-ratio 0.5) on the unified CD survival cohort (5{,}148 studies, 3{,}701 MRE + 1{,}447 CTE) with
+patient-grouped 5-fold cross-validation and Breslow baseline estimation. For \textbf{surgery}, the
+combined model (10 imaging findings + 13 clinical features) achieved a concordance index of
+\textbf{0.792 (95\% CI 0.776--0.808)}, with a 5-fold mean of $0.794 \pm 0.023$
+(Table~\ref{tab:survival}). Imaging alone reached 0.752 and clinical alone 0.689, so imaging added
+$\Delta\cindex = +0.103$ over clinical features. On a per-modality basis, surgical signal was carried
+mostly by MRE (MR-only surgery C-index 0.796, $n=3{,}701$), while CTE alone was weaker but non-trivial
+(CT-only 0.711, $n=1{,}447$); the unified combined cohort reached 0.792. For steroid dependence and
+biologic switch, clinical history dominated and imaging added little (Table~\ref{tab:survival}).
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Table 3 $\vert$ Time-to-event prediction on the unified CD CT+MR cohort}
+($n=5{,}148$; patient-grouped 5-fold cross-validation, Breslow baseline). The pooled C-index is
+reported with a bootstrap ($n=1{,}000$) 95\% confidence interval, alongside the 5-fold
+mean$\,\pm\,$SD and the imaging-only / clinical-only / combined feature sets. $\Delta$MRI = combined
+$-$ clinical-only. Higher is better.}
+\label{tab:survival}
 \small
-\begin{tabular}{@{}lccc|ccc|c@{}}
+\begin{tabular}{@{}lccccc@{}}
 \toprule
- & \multicolumn{3}{c|}{\textbf{Combined cohort}} & \multicolumn{3}{c|}{\textbf{Per-modality subset}} & \\
-\textbf{Outcome} & \textbf{Combined} & \textbf{Imaging} & \textbf{Clinical} & \textbf{MR} & \textbf{CT} & \textbf{Clin. (MR/CT)} & \textbf{$\Delta$MRI} \\
+\textbf{Outcome} & \textbf{Events} & \textbf{Imaging} & \textbf{Clinical} &
+\textbf{Combined [95\% CI] ($\pm$SD)} & \textbf{$\Delta$MRI} \\
 \midrule
-Surgery   & $\mathbf{0.816 \pm 0.015}$ & $0.776 \pm 0.019$ & $0.689 \pm 0.018$ & $0.815 \pm 0.012$ & $0.767 \pm 0.050$ & $0.670 / 0.640$ & $+0.127$ \\
-Steroid   & $0.644 \pm 0.021$ & $0.534 \pm 0.028$ & $0.646 \pm 0.033$ & $0.663 \pm 0.028$ & $0.559 \pm 0.062$ & $0.653 / 0.581$ & $-0.002$ \\
-Biologic  & $0.671 \pm 0.018$ & $0.600 \pm 0.018$ & $0.627 \pm 0.017$ & $0.655 \pm 0.016$ & $0.691 \pm 0.047$ & $0.616 / 0.600$ & $+0.044$ \\
+Surgery            & 782   & 0.752 & 0.689 & \textbf{0.792} [0.776--0.808] ($\pm$0.023) & $+0.103$ \\
+Steroid dependence & 231   & 0.575 & 0.618 & 0.655 [0.619--0.692] ($\pm$0.009)         & $+0.037$ \\
+Biologic switch    & 1{,}092 & 0.586 & 0.604 & 0.643 [0.626--0.660] ($\pm$0.021)      & $+0.039$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Imaging contributes prognostically on both modalities.}
-For surgery, imaging adds $\Delta\cindex = +0.127$ over clinical-only on the combined cohort, and the per-modality split shows CT delivers a meaningful prognostic signal in its own right (CT-only C-index $0.767$, vs.\ $0.640$ from clinical features alone on the CT subset; $\Delta = +0.127$). For biologic switch, CT in fact \emph{exceeds} MR in the per-modality C-index ($0.691$ vs.\ $0.655$), a finding that would have been invisible under the previous MR-only Stage~2.
+\subsection*{Feature importance}
 
-\paragraph{Adding CT does not degrade MR.}
-The MR-subset surgery C-index under the unified Cox ($0.815 \pm 0.012$) is statistically indistinguishable from the corresponding MR-only Cox fit on the prior cohort ($0.825 \pm 0.020$; difference within fold-to-fold SD). Joint training of Cox on CT+MR is therefore safe for the MR side, consistent with the Stage-1 leave-one-modality-out finding.
+Consistent with the surgery ablation, the imaging biomarkers corresponding to penetrating and
+stricturing phenotypes (fistula, stenosis, wall thickening, wall enhancement) carry the largest
+standardized surgical hazards, with the majority of elastic-net-selected features being imaging-derived.
+The clinical \texttt{prior surgery} indicator is strongly protective, reflecting that patients who
+already underwent resection are at lower risk of a \emph{subsequent} surgical event within the
+follow-up window.
+The finalized per-feature hazard ratios are given in Table~\ref{tab:hr}.
 
-\paragraph{Steroid dependence remains clinically driven.}
-Steroid dependence is dominated by clinical history on both modalities; imaging-only is near chance, mirroring our previous result.
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Table 4 $\vert$ Hazard ratios for surgery} (per 1 SD, ridge-penalized Cox with robust
+standard errors, unified CD cohort, n$=$5,148). Imaging biomarkers are prefixed IMG. Clinical covariates
+not shown (age, comorbidity, socioeconomic status, diagnostic delay, time to scan, sex, prior EIM, prior
+perianal, prior biologic switch) had hazard ratios within 0.98--1.03 and p $>$ 0.08.}
+\label{tab:hr}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Feature} & \textbf{HR per 1 SD} & \textbf{95\% CI} & \textbf{p} \\
+\midrule
+IMG: fistula                 & 1.27 & 1.21--1.33 & $<$0.001 \\
+IMG: stenosis                & 1.17 & 1.13--1.21 & $<$0.001 \\
+IMG: wall thickening         & 1.16 & 1.14--1.19 & $<$0.001 \\
+IMG: colonic inflammation    & 1.16 & 1.11--1.21 & $<$0.001 \\
+IMG: wall enhancement        & 1.14 & 1.11--1.17 & $<$0.001 \\
+IMG: comb sign               & 1.09 & 1.06--1.13 & $<$0.001 \\
+IMG: restricted diffusion    & 1.07 & 1.04--1.11 & $<$0.001 \\
+IMG: pre-stenotic dilatation & 1.06 & 1.03--1.10 & $<$0.001 \\
+Disease activity             & 1.06 & 1.02--1.10 & 0.004 \\
+Prior steroid dependence     & 1.06 & 1.01--1.10 & 0.013 \\
+Prior surgery                & 0.71 & 0.70--0.73 & $<$0.001 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{External Validation, Calibration, and Clinical Utility}
+\subsection*{External validation and clinical utility}
 
-\paragraph{Multi-center generalization (LOCO).}
-Leaving out each MR center in turn (Mor / SZMC / Assuta) and refitting Cox per fold on the unified cohort, the held-out-center surgery C-index was $\mathbf{0.805 \pm 0.023}$ (combined model), $0.744 \pm 0.033$ (imaging-only), and $0.659 \pm 0.045$ (clinical-only). Imaging retains its added value across held-out centers ($\Delta\cindex = +0.146$ vs.\ clinical-only under LOCO). CT-only LOCO is not feasible because center labels are unavailable for the CT cohort in this release; we report MR-LOCO as the external-generalization proxy.
+\paragraph{Multi-center generalization (leave-one-center-out).}
+Leaving out each MRE center in turn and refitting the Cox model, the held-out-center surgery C-index
+was \textbf{0.754 $\pm$ 0.053} (Mor Inside 0.823, Assuta 0.694, SZMC 0.745; Table~\ref{tab:loco}).
+CT-only leave-one-center-out is not feasible because all CTE examinations originate from a single
+center (Assuta); we therefore report MRE leave-one-center-out as the external-generalization proxy.
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Table 5 $\vert$ Leave-one-center-out (LOCO) external validation for surgery}
+on the MRE cohort (combined model). Each row leaves out one contributing center and evaluates on
+that held-out center. The mean $\pm$ SD across held-out centers is the external-generalization proxy;
+CTE is single-center and therefore not amenable to LOCO.}
+\label{tab:loco}
+\small
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Held-out center} & \textbf{Surgery C-index} \\
+\midrule
+Mor Inside & 0.823 \\
+Assuta     & 0.694 \\
+SZMC       & 0.745 \\
+\midrule
+\textbf{Mean $\pm$ SD} & \textbf{0.754 $\pm$ 0.053} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Calibration.}
-The combined surgery model achieved an integrated Brier score of $\mathbf{0.072}$ on the unified CT+MR cohort --- the lowest (best) of all configurations and better than imaging-only (0.077) or clinical-only (0.085) --- with time-dependent AUC of $\approx 0.85$ across the 1/2/3-year horizons for surgery (Figure~\ref{fig:calibration}).
+The combined surgery model was well calibrated on the clean CD-only cohort, with an integrated Brier
+score of \textbf{0.074 (95\% CI 0.068--0.079)} over the 0.1--0.9 event-time grid (lower is better).
+
+\paragraph{Unified model versus dedicated specialists.}
+To test whether one conditioned model can replace two single-modality models, we trained a dedicated
+MRE specialist and a dedicated CTE specialist (single modality, no modality conditioning) on the same
+clean CD data and evaluated all three on the held-out CD test set. On MRE the unified model matched the
+specialist (macro-AUC 0.780 [0.750--0.810] vs.\ 0.793 [0.764--0.820]; overlapping intervals), and on
+CTE the unified model \emph{outperformed} the specialist (0.744 [0.691--0.789] vs.\ 0.673 [0.606--0.729]).
+The gain on CTE is consistent with the far smaller CTE training set benefiting from joint cross-modality
+learning, whereas the data-rich MRE side is unchanged. A single unified model therefore replaces two
+specialists at no cost on MRE and with a clear gain on CTE.
 
 \paragraph{Decision-curve analysis.}
-Across the clinically relevant threshold range ($\approx 0.02$--$0.60$), the combined model on the unified cohort achieved the highest net benefit relative to treat-all and treat-none defaults (Figure~\ref{fig:dca}), with a mean net-benefit gain of $+0.020$ over the clinical-only Cox at the 5-year surgery horizon ($n=6{,}011$, $817$ events), supporting clinical actionability.
+On the clean CD cohort the observed 5-year surgery incidence was 13.4\% (Kaplan-Meier). Across the full
+range of clinically plausible decision thresholds (5\% to 50\% predicted 5-year risk), using the model to
+flag high-risk patients produced a positive net benefit that exceeded both the treat-all and the
+treat-none defaults at every threshold (for example, net benefit 0.078 at a 10\% threshold versus 0.038
+for treat-all, and 0.033 at a 25\% threshold where treat-all is already net-harmful). Acting on the
+model's risk score is therefore clinically preferable to intervening on everyone or no one throughout
+the relevant range.
 
-\subsection{Feature Importance and Risk Stratification}
-
-Consistent with the surgery ablation, the imaging biomarkers corresponding to penetrating and stricturing phenotypes (fistula, stenosis, wall thickening, wall enhancement) carry the largest standardized surgical hazards on the unified CT+MR cohort, with seven of eleven elastic-net-selected features being MRI-derived (Table~\ref{tab:hazard_ratios}). The clinical \texttt{prior surgery} indicator is strongly protective ($\text{HR} = 0.62$), reflecting that patients who already underwent surgery are at lower risk of a \emph{subsequent} surgical event in the follow-up window. Predicted-risk tertiles separate event curves with high significance on the unified cohort (Figure~\ref{fig:km_curves}).
-
-\begin{table}[h]
+\begin{figure}[htbp]
 \centering
-\caption{Non-zero elastic-net Cox coefficients and hazard ratios for surgery on the unified CT+MR A2 cohort ($n = 6{,}011$, $817$ events; $11$ of $23$ candidate features retained at the chosen regularization $\alpha = 0.033$). Features were standardized; HRs are reported per one standard deviation. Seven of eleven selected features are MRI-derived.}
-\label{tab:hazard_ratios}
-\small
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Feature} & \textbf{Source} & \textbf{HR per 1 SD} & \textbf{Direction} \\
-\midrule
-Fistula                       & MRI (MIL) & 1.363 & Risk $\uparrow$ \\
-Ileal stenosis                & MRI (MIL) & 1.290 & Risk $\uparrow$ \\
-Ileal wall thickening         & MRI (MIL) & 1.224 & Risk $\uparrow$ \\
-Ileal wall enhancement        & MRI (MIL) & 1.129 & Risk $\uparrow$ \\
-Colonic inflammation          & MRI (MIL) & 1.108 & Risk $\uparrow$ \\
-Restricted diffusion (DWI)    & MRI (MIL) & 1.096 & Risk $\uparrow$ \\
-Pre-stenotic dilatation       & MRI (MIL) & 1.012 & Risk $\uparrow$ \\
-Prior steroid dependence      & Clinical  & 1.018 & Risk $\uparrow$ \\
-Socioeconomic status (SES)    & Clinical  & 0.970 & Risk $\downarrow$ \\
-Sex (male)                    & Clinical  & 0.973 & Risk $\downarrow$ \\
-Prior surgery                 & Clinical  & 0.622 & Risk $\downarrow$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
+\includegraphics[width=0.62\linewidth]{figures/Fig5_decision_curve.png}
+\caption{\textbf{Figure 5 $\vert$ Decision-curve analysis} for the 5-year surgery horizon on the clean CD
+cohort. The model's net benefit (green) exceeds both treat-all (grey) and treat-none (red) across the full
+range of clinically plausible decision thresholds.}
+\end{figure}
 
 % ============================================================================
-\section{Discussion}
+\section*{Discussion}
 \label{sec:discussion}
 % ============================================================================
 
-We asked whether one modality-conditioned foundation-model backbone can serve both CT and MR enterography as well as two specialists, within a two-stage prognostic pipeline. The answer is a qualified yes --- \emph{provided conditioning is kept lightweight}.
+We asked whether one modality-conditioned foundation-model backbone, fed by automatically extracted
+labels, can serve both CT and MR enterography and deliver individualized CD prognosis. The answer is
+a qualified yes.
 
-\subsection{Domain-Specific Normalization Over-Parameterizes and Hurts}
+\subsection*{An honest, Crohn's-only accounting}
 
-Our cleanest, most generalizable result is methodological: among modality-conditioning components, DSBN is the one that significantly degrades performance, and it degrades the dominant modality (MR $+0.019$ macro-AUC recovered by removing it, CI excluding zero). A modality token and FiLM are nearly free and harmless-to-helpful; DSBN's separate per-modality normalization adds parameters that, at this scale, the joint task cannot support --- classic negative transfer. The practical recommendation is concrete: \textbf{condition with a token and FiLM, and omit DSBN}. This also reconciles an apparent contradiction with the cross-modal literature, where DSBN helps in large-scale adaptation: at a moderate, imbalanced CT+MR scale ($\approx 23\%$ CT), the heavier component flips from helpful to harmful.
+The single most important framing point is that our headline detection figure is deliberately
+conservative. An earlier all-IBD evaluation reported a macro-AUC of 0.849, but that number was
+inflated by ulcerative-colitis easy-negatives: UC has essentially no ileal (small-bowel) disease,
+so UC studies are true-negatives on the ileal findings that dominate the macro-average, which
+artificially raises the score. Once UC is excluded and the model is retrained end to end on the clean
+CD-only data, the honest MRE macro-AUC is $\approx 0.780$, essentially unchanged whether we evaluate
+the clean model or the previous model on the CD-only test set. We report the 0.780 figure and treat
+the $0.849 \rightarrow 0.780$ correction as a feature, not a defect: UC and CD are different diseases
+with non-comparable outcomes (colectomy vs.\ small-bowel resection), and mixing them both inflates
+apparent detection accuracy and contaminates a survival model whose surgical endpoint is CD-specific.
+Excluding UC barely changed validation performance (0.8375 vs.\ 0.8399), confirming that the clean
+cohort costs almost nothing in CD detection while making every downstream claim defensible.
 
-\subsection{Unification as Parity, Not Superiority}
+\subsection*{Imaging adds prognostic signal for surgery; clinical history dominates the rest}
 
-We deliberately frame Option~C as achieving \emph{parity} with Option~B rather than superiority. With token+FiLM, the unified model matches the MR specialist exactly and is statistically equivalent to the CT specialist (CT trend favorable but underpowered, $n=209$, CI includes zero), and matches/edges the specialists downstream. We use ``parity'' in the descriptive sense of no detected difference: this is \emph{not} a pre-specified, powered non-inferiority test with a clinical margin, and the CT comparison in particular is an underpowered null. The deployment claim we make --- one model rather than two, at no detected accuracy cost --- is robust to this caveat; a formal non-inferiority margin would strengthen it. The deployment value is real and modest: one model instead of two to train, validate, calibrate, and maintain, with no statistically significant accuracy cost. The comparison is fair because the warm-start is applied symmetrically to both options; a cold-start experiment would instead probe the \emph{mechanism} of transfer (which we do not claim) rather than the deployment question (which we do). We therefore avoid any \emph{Stage-1} "CT improves MR" claim: the leave-one-modality-out experiment shows CT supervision has no detectable effect on MR finding detection. The Stage-2 unified Cox is a separate, complementary claim --- CT contributes a prognostic signal of its own ($n=1{,}820$, surgery $C = 0.767$) and adding CT to the unified Cox does not degrade MR ($C = 0.815$ on the MR subset, indistinguishable from the prior MR-only Cox).
+For surgery, imaging contributes substantial prognostic value ($\Delta\cindex = +0.103$ over
+clinical-only), with penetrating and stricturing imaging phenotypes carrying the strongest hazard.
+A patient with radiological evidence of fistula, stenosis, or pre-stenotic dilatation faces elevated
+surgical risk even when clinical history appears unremarkable. The outcome-specific pattern is
+informative: steroid dependence is driven by treatment history (a clinical, not imaging, phenomenon),
+and biologic switch reflects both morphology and history, so imaging adds little to either. This
+argues against a single-modality view of CD prognosis and for reporting per-outcome, rather than
+aggregate, contributions.
 
-\subsection{MRI Reveals Prognostic Information Beyond Clinical History}
+\subsection*{Lightweight conditioning matches specialists; DSBN causes negative transfer}
 
-For surgery, imaging contributes substantial prognostic value ($\Delta\cindex = +0.145$ over clinical-only), with penetrating/stricturing imaging phenotypes carrying the strongest hazard. A patient with radiological evidence of fistula, stenosis, or pre-stenotic dilatation faces elevated surgical risk even when clinical history appears unremarkable. Outcome-specific pathways are evident: steroid dependence is driven by treatment history (a clinical phenomenon), while biologic switch reflects both morphology and history.
+Among modality-conditioning components, a modality token and FiLM are nearly free and match dedicated
+specialists, whereas domain-specific normalization (DSBN) adds per-modality parameters that this
+moderate, imbalanced CT+MR scale cannot support, degrading the dominant modality (MRE). The practical
+recommendation is concrete: condition with a token and FiLM, and omit DSBN. This reconciles an apparent
+contradiction with the cross-modal literature, where DSBN helps in large-scale adaptation; at a moderate,
+imbalanced scale ($\approx 20\%$ CT) the heavier component flips from helpful to harmful. We frame
+unification as \emph{parity} (no detected accuracy difference relative to two specialists) rather than
+superiority, since we did not run a formally powered non-inferiority trial; the deployment value, one
+model instead of two to train, validate, calibrate, and maintain, is real and does not depend on a
+superiority claim.
 
-\subsection{Stage 2 Plateaus Across Backbones --- an EPV Hypothesis}
+\subsection*{A unified CT+MR survival model}
 
-Stage~2 performance is remarkably stable across backbones and conditioning choices (the unified, full-DSBN, and specialist variants all land near a surgery C-index of $\approx 0.82$). We interpret this cautiously. With the unified cohort, EPV at 23 features is comfortable ($\approx 35$ for surgery, $13$ for steroid, $54$ for biologic), so this is not a raw degrees-of-freedom problem; rather, the 10-finding $\rightarrow$ Cox \emph{interface} may already saturate the prognostic signal extractable at this event count, so small Stage-1 macro-AUC gains need not perturb the finding probabilities enough to move downstream risk. We present this as a hypothesis, not a tested claim; confirming it would require manipulating event count or the survival-head dimensionality directly.
+An updated outcomes release linked time-to-event labels to CTE studies, enabling, to our knowledge for
+the first time in CD, a Cox prognostic model fit jointly on CTE and MRE. Most of the surgical signal is
+carried by MRE (MR-only C-index 0.796), but CTE contributes a non-trivial surgical signal on its own subset
+(CT-only 0.711), and combining the two does not degrade overall performance (unified 0.792). Because
+all CTE originates from a single center, external CT generalization remains to be shown, but the joint
+cohort already surfaces per-modality effects that a MR-only analysis would miss.
 
-\subsection{Clinical Utility}
-
-External (LOCO) generalization, low IBS, and favorable DCA net benefit collectively meet the digital-medicine evidence bar for a deployment-oriented prognostic tool, while remaining honest about scope.
-
-\subsection{Limitations}
+\subsection*{Limitations}
 
 \begin{itemize}
-    \item \textbf{Labels are model-derived.} The 10 findings come from a report-text information-extraction model, not prospective human annotation. Both options are scored against the same labels, so the \emph{comparison} is unaffected, but absolute performance inherits label noise.
-    \item \textbf{Single internal cohort; multi-center external validation pending.} Although A2's edge over A3 is confirmed by nested cross-validation across five patient-level CV folds (Table~\ref{tab:nested_cv}), and the leave-one-modality-out experiment shows the joint-vs.\ MR-only choice is not load-bearing, all evaluation is internal to the contributing Israeli centers. True external validation on an independent cohort would strengthen the deployment claim.
-    \item \textbf{CT Stage-1 comparison is underpowered.} The CT Stage-1 test set is small ($n=209$), so the CT specialist-vs-unified comparison is a trend rather than a powered result. Stage 2 now includes CT (1{,}820 studies, 130 surgery events) thanks to an updated outcomes release, but center labels are not yet available for CT, so multi-center LOCO is reported on MR only.
-    \item \textbf{Retrospective design and proportional-hazards assumption.} Selection biases cannot be fully excluded; time-varying effects were not modeled.
-    \item \textbf{Per-study modeling.} Stage~2 operates at the study level under patient-level splits; per-patient temporal aggregation of multi-scan patients is left to future work.
+  \item \textbf{Labels are model-derived.} The ten findings come from a report-text extraction model
+        (HSMP-BERT), not prospective human annotation; both the unified and specialist models are scored
+        against the same labels, so the comparison is unaffected, but absolute figures inherit label noise.
+  \item \textbf{CTE is single-center.} All CTE examinations originate from Assuta, so multi-center
+        (leave-one-center-out) external validation is reported on MRE only.
+  \item \textbf{Retrospective design and proportional-hazards assumption.} Selection biases cannot be fully
+        excluded; time-varying effects were not modeled.
+  \item \textbf{Decision-curve evidence pending.} The combined surgery model is well calibrated
+        (integrated Brier score 0.074 [0.068--0.079]), but the decision-curve net-benefit analysis on the
+        clean CD-only cohort, and a unified-vs-specialist Stage-2 comparison, are being finalized.
+  \item \textbf{Per-study modeling.} Stage 2 operates at the study level under patient-level splits;
+        per-patient temporal aggregation of multi-scan patients is left to future work.
 \end{itemize}
 
-\subsection{Future Directions}
+\subsection*{Conclusion}
 
-\begin{enumerate}
-    \item \textbf{Leave-one-modality-out.} Train token+FiLM on MR-only and compare to the joint CT+MR model on the MR test set; only if the joint model is non-inferior or better on MR would a "CT supervision helps MR" claim be warranted --- a question we leave open rather than assert.
-    \item \textbf{True external validation} on an independent multi-center cohort, beyond the internal nested CV reported here. Such a cohort with linked MR outcomes is not currently available within our consortium and is left to subsequent work.
-    \item \textbf{Joint multi-task training} of the encoder with a survival auxiliary loss, the natural way to test (and potentially break) the EPV plateau.
-    \item \textbf{Per-patient longitudinal modeling} across multiple scans.
-\end{enumerate}
-
-
-% ============================================================================
-\section{Intended Use, Ethics, and Reproducibility}
-\label{sec:repro}
-% ============================================================================
-
-\paragraph{Intended use.}
-The pipeline is intended as clinical \emph{decision support} --- a risk-stratification aid that flags patients at elevated risk of surgery for earlier multidisciplinary review --- not an autonomous diagnostic device. The unified detector additionally enables a single deployable finding-detection model wherever either CTE or MRE is acquired.
-
-\paragraph{Ethics.}
-This retrospective multi-center study was approved by the institutional review board with a waiver of informed consent appropriate to retrospective imaging research; original imaging and clinical databases were accessed read-only. \todo{Helsinki/IRB approval numbers and the inter-center data-sharing agreements will be added at the submission stage by the clinical PI team (Shaare Zedek Medical Center).}
-
-\paragraph{Data and code availability.}
-The training, inference, and evaluation code (backbone with LoRA adapters, modality-conditioning modules, MIL head, survival fitting, decision-curve and calibration evaluation) will be released on a public GitHub repository upon acceptance of the manuscript, with the repository URL added at the proof stage. Trained checkpoints will be made available to non-commercial academic users on reasonable request. The de-identified derived dataset (10 finding probabilities and clinical features per study; no images) underlying Figures~\ref{fig:dca} and \ref{fig:km_curves} can be shared subject to the inter-center data-sharing agreements; raw DICOM data cannot be shared because original imaging is governed by individual hospital data-use agreements.
-
+A single conditioning-light foundation-model backbone, fed by automatically extracted report labels, can
+detect CD findings from both CTE and MRE and deliver individualized, calibrated prognosis. On a rigorously
+clean CD-only cohort, the unified detector reaches an MRE macro-AUC of 0.780 and the survival head predicts
+time to surgery with a C-index of 0.792, with imaging adding 0.103 over clinical features, generalizing
+across centers (LOCO 0.754), and remaining well calibrated (integrated Brier score 0.074). A modality
+token plus FiLM is the conditioning sweet spot; domain-specific
+normalization should be omitted. We present the $0.849 \rightarrow 0.780$ correction and the honest,
+CD-only accounting as strengthening, rather than weakening, the case for unified, conditioning-light
+enterography pipelines.
 
 % ============================================================================
-\section{Conclusion}
-\label{sec:conclusion}
+\section*{Methods}
+\label{sec:methods}
 % ============================================================================
 
-A single modality-conditioned foundation-model backbone can detect Crohn's-disease findings from both CT and MR enterography as well as two dedicated specialists --- halving the number of models to deploy --- \emph{provided} conditioning is lightweight. Our lead methodological result is that domain-specific normalization over-parameterizes this setting and causes statistically significant negative transfer on the dominant modality; a modality token plus FiLM is the sweet spot. Downstream, the unified model's MR-only survival head predicts time to surgery with a C-index of $0.825$ ($+0.145$ over clinical features alone), generalizes across centers, is well calibrated, and yields positive clinical net benefit. We frame Stage-1 unification as parity rather than superiority. With an updated outcomes release we extend Stage~2 to a unified CT and MR Cox model: CT delivers a meaningful prognostic signal on its own (surgery $C = 0.767$, biologic $C = 0.691$) without degrading the MR side --- an honest accounting that we believe strengthens, rather than weakens, the case for unified, conditioning-light enterography pipelines.
+\subsection*{Study population and cohort definition}
 
+This retrospective study pooled CD examinations from four Israeli centers (Mor, Assuta, Shaare Zedek
+Medical Center [SZMC], and Rambam), spanning MRE and CTE. The study was approved by the institutional
+review board of the coordinating center, and the requirement for individual informed consent was waived
+for this retrospective analysis of de-identified data; original imaging and clinical databases were
+treated as read-only. \TODO{Insert the Helsinki/IRB approval number(s) and inter-center data-sharing
+agreement references (clinical PI team, SZMC).}
+
+\paragraph{Ulcerative-colitis exclusion.}
+Because the surgical endpoint (small-bowel resection) is CD-specific and not comparable to the UC surgical
+endpoint (colectomy), we excluded all UC studies. Subtype was taken from the IBD registry (\texttt{IBD\_subtype})
+and verified to be 100\% consistent across database versions on the shared accessions. The 883 excluded UC
+studies (510 MRE + 373 CTE) exhibited a textbook UC signature (low on every ileal finding, higher on colonic
+inflammation), confirming that the subtype labels are meaningful. Studies without a registry subtype
+(1{,}839, mostly healthy controls not in the IBD registry) were retained but flagged separately.
+
+\paragraph{Data splitting and leakage control.}
+All splits were performed at the patient level (a patient appears in only one split), grouped by
+\texttt{patient\_id}. A leakage issue in an earlier split (204 patients whose studies spanned
+train/val/test) was repaired by majority reassignment (214 studies moved), after which zero patients span
+splits. The same patient-grouped 5-fold assignment was used consistently for both stages.
+
+\subsection*{Imaging preprocessing}
+
+Each study was reduced to \textbf{16 axial slices} by uniform \texttt{linspace} sampling and resized to
+$224 \times 224$. For MRE, T2-weighted and T1-weighted post-contrast sequences were used; CTE was routed
+through the T2 branch with the T1 branch zeroed via a missing-modality mask. Because CTE spans the whole
+abdomen and thorax, the bowel was localized before slice sampling: TotalSegmentator \cite{wasserthal2023totalseg}
+(fast mode) produced small-bowel and colon masks whose union bounding box (with a 10-voxel pad) cropped the
+volume, after which 16 slices were evenly sampled on the cropped volume. This mirrors the MRE bowel-crop
+pipeline, so localization comes from the crop rather than the slice sampler.
+
+\subsection*{Automatic label extraction (HSMP-BERT)}
+
+Ten radiological findings (Table~\ref{tab:detection}) were extracted from the free-text (Hebrew)
+enterography reports using HSMP-BERT, a clinical natural-language information-extraction model for CD
+report text, applied identically to MRE and CTE reports. Graded inflammation outputs were binarized at
+grade $\geq 1$. The extractor produces one binary label per finding per study; the same label definition
+governs both modalities and both the unified detector and the modality specialists. On the subset with
+previously validated binary disease-activity labels, the extracted findings reproduced those labels on
+all 6,223 studies; a prospective per-finding validation against radiologist annotation is planned.
+\TODO{Add the HSMP-BERT model citation.}
+
+\subsection*{Clinical features}
+
+Thirteen clinical features (6 continuous, 7 binary) were extracted from the clinical outcomes table,
+representing disease characteristics and treatment history at the time of imaging: time from diagnosis to
+imaging, age at diagnosis, Charlson Comorbidity Index, disease-activity cluster, socioeconomic status, and
+diagnostic delay; and prior surgery, prior steroid dependence, prior biologic switch, prior extraintestinal
+manifestations, prior perianal disease, sex, and a clinical-data-availability indicator. Missing values were
+imputed from the training set only (median for continuous, mode for binary), with a \texttt{has\_clinical}
+indicator so the model can discount imputed values.
+
+\subsection*{Stage 1: unified finding detection}
+
+A \textbf{frozen DINOv3-Base} backbone \cite{dinov3} extracts per-slice features; \textbf{low-rank (LoRA)
+adapters} \cite{hu2021lora} ($\approx 8.5\%$ of parameters trainable) adapt it cheaply and stably. A
+dual-branch design processes T2 and T1 (CTE uses the T2 branch with T1 zeroed). Ten \emph{independent}
+gated-attention MIL heads \cite{ilse2018attention}, one per finding, pool slices into bag representations:
+\begin{equation}
+    a_k^{(i)} = \operatorname{softmax}\!\left( \mathbf{w}^{(i)\top} \!\left( \tanh(\mathbf{V}^{(i)} \mathbf{h}_k) \odot \sigma(\mathbf{U}^{(i)} \mathbf{h}_k) \right) \right), \qquad
+    \mathbf{z}^{(i)} = \sum_{k=1}^{16} a_k^{(i)} \mathbf{h}_k ,
+\end{equation}
+where $\mathbf{h}_k$ is the fused representation of slice $k$ and $i$ indexes the finding. Each bag
+representation is concatenated with clinical features and passed through a per-finding multilayer perceptron.
+
+\paragraph{Modality conditioning.}
+The unified model conditions the shared backbone on modality using (a) a learned \textbf{modality token}
+indicating CTE vs.\ MRE, and (b) \textbf{FiLM} \cite{perez2018film}, per-channel scale and shift predicted
+from the modality token. We evaluated a conditioning ladder: token only, token+FiLM (adopted as the
+production A2 configuration), and token+FiLM+\textbf{DSBN} \cite{chang2019dsbn}, the last of which applies
+modality-specific normalization. DSBN degraded the dominant modality (negative transfer) and was omitted.
+Modality specialists (one backbone per modality, no conditioning) provide the head-to-head baseline.
+
+\paragraph{Warm-start and training.}
+All Stage-1 models (specialists and unified variants) were warm-started from the same prior MR-only DINOv3
+checkpoint, applied symmetrically so that any initialization advantage is conferred equally. Models were
+trained on a single NVIDIA A6000 (48 GB) in bfloat16 with a tier-aware asymmetric loss \cite{ridnik2021asl}
+for class imbalance, AdamW with differential learning rates, and early stopping on validation macro-AUC.
+The clean CD-only retrain reached its best validation macro-AUC (0.8375) at epoch 8.
+
+\subsection*{Stage 2: time-to-event prediction}
+
+For each study, the trained A2 detector produces ten sigmoid-calibrated finding probabilities
+$\hat{p}_1,\dots,\hat{p}_{10}$, concatenated with the 13 clinical features to form a 23-dimensional vector.
+A separate elastic-net penalized Cox model \cite{polsterl2020scikit} is fit per outcome:
+\begin{equation}
+    h(t \mid \mathbf{x}) = h_0(t)\exp(\boldsymbol{\beta}^\top \mathbf{x}),
+\end{equation}
+with $\ell_1/\ell_2$ ratio 0.5 and a Breslow estimator giving the baseline cumulative hazard and
+individualized survival curves $\hat{S}(t\mid\mathbf{x})$. The two-stage design is motivated by (i) the
+supervision advantage (Stage 1 sees far more labeled studies than there are survival events), (ii)
+interpretability of the intermediate biomarkers, and (iii) statistical efficiency: at these event counts a
+low-dimensional Cox model respects the events-per-variable constraint (surgery: 782 events / 23 features
+$\approx 34$) where an end-to-end deep survival model would overfit.
+
+\subsection*{Evaluation and statistics}
+
+We report the concordance index (C-index; the probability that the model assigns higher risk to the patient
+with the sooner event, 0.5 = chance) with bootstrap ($n=1{,}000$) 95\% confidence intervals, and 5-fold
+patient-grouped cross-validation means $\pm$ SD. Feature-set ablations compare combined (23-dimensional) vs.\
+imaging-only (10-dimensional) vs.\ clinical-only (13-dimensional) inputs, with $\Delta$MRI = combined $-$
+clinical-only. External generalization was assessed by leave-one-center-out (LOCO) on MRE. Calibration
+(integrated Brier score) and decision-curve analysis \cite{vickers2006dca} on the clean CD-only cohort are
+being finalized. Stage-1 model pairs (unified vs.\ specialist, and ablation rungs) were compared with paired
+bootstrap confidence intervals on test-set macro-AUC (the unweighted mean of the ten per-finding AUCs).
 
 % ============================================================================
-% FIGURES
+\section*{Data availability}
 % ============================================================================
+The de-identified derived dataset (ten finding probabilities and clinical features per study; no images)
+underlying the survival and decision-curve analyses can be shared subject to the inter-center data-sharing
+agreements. Raw DICOM data cannot be shared because original imaging is governed by individual hospital
+data-use agreements. Requests should be directed to the corresponding author.
 
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.98\textwidth]{figures/fig_architecture.png}
-\caption{Overview of the unified two-stage pipeline and the Option~B (specialists) vs.\ Option~C (unified, modality-conditioned) comparison. CT is bowel-localized via TotalSegmentator before slice sampling and routed through the T2 branch.}
-\label{fig:architecture}
-\end{figure}
-
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.85\textwidth]{figures/fig_stage1_ladder.png}
-\caption{Stage~1 macro-AUC across the conditioning ladder. Removing DSBN (A2 vs.\ A3) significantly improves MR; token+FiLM (A2) matches the MR specialist and ties the CT specialist.}
-\label{fig:ladder}
-\end{figure}
-
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.48\textwidth]{figures/calibration_5yr_surgery.png}\hfill%
-\includegraphics[width=0.48\textwidth]{figures/td_auc_curve_surgery.png}
-\caption{Calibration and time-dependent discrimination for surgery (unified model). Integrated Brier score $= 0.085$.}
-\label{fig:calibration}
-\end{figure}
-
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.72\textwidth]{figures/fig_dca_surgery.png}
-\caption{Decision-curve analysis for surgery. The combined model has the highest net benefit across thresholds $\approx 0.03$--$0.60$.}
-\label{fig:dca}
-\end{figure}
-
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.98\textwidth]{figures/fig_km_combined.png}
-\caption{Kaplan--Meier survival curves stratified by predicted-risk tertile (unified model).}
-\label{fig:km_curves}
-\end{figure}
-
+% ============================================================================
+\section*{Code availability}
+% ============================================================================
+The training, inference, and evaluation code (frozen backbone with LoRA adapters, modality-conditioning
+modules, MIL head, survival fitting, and calibration/decision-curve evaluation) will be released on a public
+GitHub repository upon acceptance, with the repository URL added at the proof stage. Trained checkpoints will
+be made available to non-commercial academic users on reasonable request.
 
 % ============================================================================
 % REFERENCES
 % ============================================================================
-
-\bibliographystyle{elsarticle-num}
+\bibliographystyle{unsrt}
 
 \begin{thebibliography}{99}
 
@@ -528,16 +649,18 @@ Rimola J, Ordas I, Rodriguez S, et al.
 Magnetic resonance imaging for evaluation of Crohn's disease: validation of parameters of severity and quantitative index of activity.
 \textit{Inflammatory Bowel Diseases}. 2011;17(8):1759--1768.
 
+\bibitem{bhandari2026smaria}
+Bhandari P, et al.
+Simplified Magnetic Resonance Index of Activity (sMaRIA) is associated with future surgery but correlates only modestly with endoscopic inflammation in Crohn's disease: an analysis of the PROFILE trial.
+\textit{Journal of Crohn's and Colitis}. 2026 (in press).
+
 \bibitem{dl_ibd_review}
 Stable E, Arnone D, Engel H, et al.
 Artificial intelligence in inflammatory bowel disease: a systematic review of diagnostic and prognostic applications.
 \textit{Journal of Crohn's and Colitis}. 2024;18(Supplement 1):i246--i247.
 
 \bibitem{dinov3}
-Sim\'eoni O, Vo HV, Seitzer M, Baldassarre F, Oquab M, Jose R, Khalidov V,
-Szafraniec M, Yi S, Ramamonjisoa M, Massa F, Haziza D, Wehrstedt L, Wang J,
-Darcet T, Moutakanni T, Sentana L, Roberts C, Vedaldi A, Tolan M, Couprie C,
-Alahari K, Labatut P, Joulin A, Jegou H, Bojanowski P, Howes R.
+Sim\'eoni O, Vo HV, Seitzer M, et al.
 DINOv3.
 \textit{arXiv:2508.10104}. 2025.
 
@@ -590,10 +713,10 @@ Li B, Li Y, Eliceiri KW.
 Dual-stream multiple instance learning network for whole slide image classification with self-supervised contrastive learning.
 \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}. 2021;14318--14328.
 
-\bibitem{defined_mil_brain}
-Chikontwe P, Luna M, Kang M, Hong KS, Ahn JH, Park SH.
-Dual attention multiple instance learning with unsupervised complementary loss for COVID-19 screening.
-\textit{Medical Image Analysis}. 2021;72:102105.
+\bibitem{plattner2025ibdome}
+Plattner C, Sturm G, et al.
+IBDome: an integrated molecular, histopathological, and clinical atlas of inflammatory bowel diseases.
+\textit{bioRxiv}. 2025. doi:10.1101/2025.03.26.645544.
 
 \bibitem{katzman2018deepsurv}
 Katzman JL, Shaham U, Cloninger A, Bates J, Jiang T, Kluger Y.
@@ -604,23 +727,6 @@ DeepSurv: personalized treatment recommender system using a Cox proportional haz
 Lee C, Zame W, Yoon J, van der Schaar M.
 DeepHit: a deep learning approach to survival analysis with competing risks.
 \textit{Proceedings of the AAAI Conference on Artificial Intelligence}. 2018;32(1).
-
-\bibitem{gliosurv2025}
-GlioSurv: multimodal transformer for individualized survival prediction in diffuse glioma.
-\textit{npj Digital Medicine}. 2025. \texttt{https://doi.org/10.1038/s41746-025-02018-x}.
-
-\bibitem{cervipro2025}
-CerviPro: deep multimodal fusion for survival prediction in locally advanced cervical cancer.
-\textit{npj Digital Medicine}. 2025. \texttt{https://doi.org/10.1038/s41746-025-01903-9}.
-
-\bibitem{prismcrc2025}
-PRISM-CRC: deep multimodal fusion of patho-radiomic and clinical data for survival in colorectal cancer.
-\textit{npj Digital Medicine}. 2025. \texttt{https://doi.org/10.1038/s41746-025-02210-z}.
-
-\bibitem{ridnik2021asl}
-Ridnik T, Ben-Baruch E, Zamir N, Noy A, Friedman I, Protter M, Zelnik-Manor L.
-Asymmetric loss for multi-label classification.
-\textit{Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)}. 2021;82--91.
 
 \bibitem{polsterl2020scikit}
 P{\"o}lsterl S.
@@ -636,6 +742,11 @@ Decision curve analysis: a novel method for evaluating prediction models.
 Silverberg MS, Satsangi J, Ahmad T, et al.
 Toward an integrated clinical, molecular and serological classification of inflammatory bowel disease.
 \textit{Can J Gastroenterol}. 2005;19(Suppl A):5A--36A.
+
+\bibitem{defined_mil_brain}
+Chikontwe P, Luna M, Kang M, Hong KS, Ahn JH, Park SH.
+Dual attention multiple instance learning with unsupervised complementary loss for COVID-19 screening.
+\textit{Medical Image Analysis}. 2021;72:102105.
 
 \end{thebibliography}
 

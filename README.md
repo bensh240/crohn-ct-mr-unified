@@ -16,15 +16,23 @@ A two-stage pipeline for Crohn's disease enterography.
 adapters and dual-branch multi-instance learning (MIL) detects 10
 radiological findings (fistula, stenosis, wall thickening, etc.) from
 either CT or MR enterography. One unified backbone serves both modalities
-via a learned modality token and FiLM conditioning. Achieves Stage-1
-test macro-AUC 0.849 (MR) / 0.772 (CT), confirmed across five patient-level
-nested-CV folds.
+via a learned modality token and FiLM conditioning. On a held-out Crohn's-only
+test set it reaches macro-AUC 0.780 (MR) / 0.744 (CT). A single unified model
+matches a dedicated MR specialist (0.780 vs 0.793) and outperforms a dedicated
+CT specialist (0.744 vs 0.673), since the data-limited CT side gains from joint
+cross-modality learning.
 
 **Stage 2 (time-to-event prediction).** A penalized Cox model on the unified
 CT+MR cohort predicts time to surgery, steroid dependence, and biologic
-therapy switch. Surgery C-index 0.816 +/- 0.015, IBS 0.072, LOCO 0.805 +/- 0.023
-(MR centers); CT contributes a meaningful prognostic signal on its own
-(surgery 0.767, biologic 0.691).
+therapy switch. Surgery C-index 0.792 (95% CI 0.776-0.808), imaging adding
++0.103 over clinical features alone; IBS 0.074, LOCO 0.754 +/- 0.053 (MR centers).
+CT contributes a meaningful prognostic signal on its own (surgery C-index 0.711).
+
+All numbers are on the clean Crohn's-disease cohort: ulcerative-colitis studies
+were excluded (their outcomes are not comparable to CD), which is why an earlier
+all-inflammatory-bowel-disease evaluation reported a higher but UC-inflated
+detection macro-AUC of 0.849. Reported metrics use patient-grouped 5-fold
+cross-validation with paired bootstrap 95% confidence intervals.
 
 **Key methodological finding.** Domain-specific normalization (DSBN) causes
 statistically significant negative transfer on the dominant MR modality
