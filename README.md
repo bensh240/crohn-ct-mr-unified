@@ -34,11 +34,14 @@ all-inflammatory-bowel-disease evaluation reported a higher but UC-inflated
 detection macro-AUC of 0.849. Reported metrics use patient-grouped 5-fold
 cross-validation with paired bootstrap 95% confidence intervals.
 
-**Key methodological finding.** Domain-specific normalization (DSBN) causes
-statistically significant negative transfer on the dominant MR modality
-(paired-fold mean macro-AUC delta of +0.0075 in favor of removing DSBN,
-95% CI [+0.003, +0.012] across 5 folds). A modality token plus FiLM is the
-sweet spot; heavier conditioning should be omitted.
+**Key methodological finding.** On the clean Crohn's-only cohort the three
+conditioning variants are statistically equivalent: a modality token (A1), token +
+FiLM (A2), and token + FiLM + domain-specific normalization (DSBN, A3) reach MR
+macro-AUC 0.785 / 0.780 / 0.780 and CT 0.747 / 0.744 / 0.744, with every pairwise
+difference non-significant (A2 vs A3 on MR: delta +0.001, 95% CI [-0.011, +0.012],
+patient-clustered bootstrap). DSBN adds parameters without benefit, so we adopt the
+lighter modality token + FiLM for parsimony. (An earlier all-IBD evaluation suggested
+DSBN caused negative transfer; that effect did not replicate once UC was excluded.)
 
 ## Layout
 

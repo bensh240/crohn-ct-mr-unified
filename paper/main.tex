@@ -69,8 +69,8 @@ of 0.792 (0.776--0.808), where imaging added 0.103 over clinical features alone,
 centers (leave-one-center-out 0.754), and was well calibrated (integrated Brier score 0.074). A modality
 token with feature-wise
 linear modulation let one unified model match the MRI specialist (0.780 vs 0.793) and outperform the
-CT specialist (0.744 vs 0.673), whereas domain-specific normalization degraded the dominant modality.
-A single conditioning-light foundation model can therefore serve both modalities and deliver
+CT specialist (0.744 vs 0.673), while a heavier domain-specific normalization variant offered no
+additional benefit. A single conditioning-light foundation model can therefore serve both modalities and deliver
 individualized, calibrated CD prognosis.
 \end{abstract}
 
@@ -118,8 +118,8 @@ without manual annotation. (ii) \textbf{A unified CT+MR detector.} A single froz
 with low-rank adapters, dual-branch multi-instance learning (MIL), and lightweight modality
 conditioning detects the ten findings from both modalities, matching the MRE specialist and
 outperforming the CTE specialist;
-we show that a modality token with feature-wise linear modulation (FiLM) is the sweet spot, while
-domain-specific normalization (DSBN) causes negative transfer on the dominant modality. (iii) \textbf{A
+we show that a modality token with feature-wise linear modulation (FiLM) is sufficient, while
+adding domain-specific normalization (DSBN) yields no measurable benefit on this moderate, imbalanced scale. (iii) \textbf{A
 two-stage detection-to-prognosis design.} The detected findings feed a penalized Cox model that issues
 individualized time-to-event predictions for surgery, steroid dependence, and biologic switch, jointly
 on CT and MR. (iv) \textbf{A rigorously clean CD-only cohort.} We exclude ulcerative colitis (UC), a
@@ -228,10 +228,12 @@ wall enhancement 0.795 on MRE) and weakest for comb sign (0.712).
 
 Retraining Stage 1 end to end on the clean CD-only data barely moved validation performance
 (validation macro-AUC 0.8375, versus 0.8399 for the pre-exclusion model), confirming that excluding
-UC did not degrade CD detection. Among modality-conditioning components, a modality token and FiLM
-matched dedicated per-modality specialists, whereas DSBN over-parameterized this moderately
-imbalanced ($\approx 20\%$ CT) setting and reduced the dominant-modality (MRE) macro-AUC; we
-therefore adopted token+FiLM (A2) and omitted DSBN.
+UC did not degrade CD detection. Among modality-conditioning components, the three variants were statistically equivalent on the
+clean CD-only test set (token 0.785, token+FiLM 0.780, token+FiLM+DSBN 0.780 MRE macro-AUC;
+0.747 / 0.744 / 0.744 CTE), with every pairwise difference non-significant (A2 vs A3 on MRE:
+$\Delta = +0.001$, 95\% CI $[-0.011, +0.012]$, patient-clustered bootstrap). Since DSBN adds
+per-modality parameters without measurable benefit at this moderately imbalanced ($\approx 20\%$ CT)
+scale, we adopted the lighter token+FiLM (A2) for parsimony.
 
 \begin{table}[htbp]
 \centering
@@ -442,14 +444,15 @@ and biologic switch reflects both morphology and history, so imaging adds little
 argues against a single-modality view of CD prognosis and for reporting per-outcome, rather than
 aggregate, contributions.
 
-\subsection*{Lightweight conditioning matches specialists; DSBN causes negative transfer}
+\subsection*{Lightweight conditioning matches specialists; DSBN adds no benefit}
 
 Among modality-conditioning components, a modality token and FiLM are nearly free and match dedicated
 specialists, whereas domain-specific normalization (DSBN) adds per-modality parameters that this
-moderate, imbalanced CT+MR scale cannot support, degrading the dominant modality (MRE). The practical
-recommendation is concrete: condition with a token and FiLM, and omit DSBN. This reconciles an apparent
-contradiction with the cross-modal literature, where DSBN helps in large-scale adaptation; at a moderate,
-imbalanced scale ($\approx 20\%$ CT) the heavier component flips from helpful to harmful. We frame
+moderate, imbalanced CT+MR scale does not reward: the three variants are statistically equivalent
+(A2 vs A3 on MRE: $\Delta = +0.001$, 95\% CI $[-0.011, +0.012]$). The practical
+recommendation is concrete: condition with a token and FiLM, and omit DSBN for parsimony. This nuances the
+cross-modal literature, where DSBN helps in large-scale adaptation; at a moderate,
+imbalanced scale ($\approx 20\%$ CT) the heavier component provides no measurable gain. We frame
 unification as \emph{parity} (no detected accuracy difference relative to two specialists) rather than
 superiority, since we did not run a formally powered non-inferiority trial; the deployment value, one
 model instead of two to train, validate, calibrate, and maintain, is real and does not depend on a
@@ -570,7 +573,7 @@ The unified model conditions the shared backbone on modality using (a) a learned
 indicating CTE vs.\ MRE, and (b) \textbf{FiLM} \cite{perez2018film}, per-channel scale and shift predicted
 from the modality token. We evaluated a conditioning ladder: token only, token+FiLM (adopted as the
 production A2 configuration), and token+FiLM+\textbf{DSBN} \cite{chang2019dsbn}, the last of which applies
-modality-specific normalization. DSBN degraded the dominant modality (negative transfer) and was omitted.
+modality-specific normalization. The three variants were statistically equivalent on the clean CD cohort, so DSBN was omitted for parsimony.
 Modality specialists (one backbone per modality, no conditioning) provide the head-to-head baseline.
 
 \paragraph{Warm-start and training.}
