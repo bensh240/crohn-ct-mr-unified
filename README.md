@@ -2,9 +2,8 @@
 
 Code accompanying the paper:
 
-> **A Unified CT and MR Enterography Foundation-Model Pipeline for Crohn's
-> Disease: Lightweight Modality Conditioning Matches Dual Specialists, While
-> Domain-Specific Normalization Induces Negative Transfer.**
+> **A Unified CT and MR Enterography Foundation-Model Pipeline for
+> Individualized Prognosis in Crohn's Disease.**
 > Ben Shaya, Moti Freiman. MSc thesis, Reichman University &times;
 > Shaare Zedek Medical Center. Manuscript submitted to *npj Digital Medicine*.
 
